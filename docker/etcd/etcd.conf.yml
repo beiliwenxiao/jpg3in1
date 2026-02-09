@@ -1,0 +1,149 @@
+# etcd 服务注册中心配置
+# 用于多语言通信框架的服务注册与发现
+
+# 集群配置
+cluster:
+  name: framework-cluster
+  initial_cluster_token: etcd-cluster
+  initial_cluster_state: new
+
+# 命名空间配置
+namespace:
+  # 框架根命名空间
+  root: /framework
+  
+  # 服务注册命名空间
+  services: /framework/services
+  
+  # 配置命名空间
+  config: /framework/config
+  
+  # 锁命名空间
+  locks: /framework/locks
+  
+  # 健康检查命名空间
+  health: /framework/health
+
+# TTL 配置（单位：秒）
+ttl:
+  # 服务注册 TTL（服务实例的租约时间）
+  service_registration: 30
+  
+  # 心跳间隔（应该小于 service_registration）
+  heartbeat_interval: 10
+  
+  # 服务发现缓存 TTL
+  discovery_cache: 60
+  
+  # 配置缓存 TTL
+  config_cache: 300
+  
+  # 分布式锁 TTL
+  lock: 60
+
+# 服务注册配置
+service_registration:
+  # 是否启用自动注册
+  auto_register: true
+  
+  # 是否启用自动注销
+  auto_deregister: true
+  
+  # 是否启用健康检查
+  health_check_enabled: true
+  
+  # 健康检查间隔（秒）
+  health_check_interval: 10
+  
+  # 健康检查超时（秒）
+  health_check_timeout: 5
+  
+  # 健康检查失败阈值（连续失败多少次后标记为不健康）
+  health_check_failure_threshold: 3
+
+# 服务发现配置
+service_discovery:
+  # 是否启用缓存
+  cache_enabled: true
+  
+  # 缓存大小
+  cache_size: 1000
+  
+  # 是否启用监听（watch）
+  watch_enabled: true
+  
+  # 监听超时（秒）
+  watch_timeout: 300
+
+# 负载均衡配置
+load_balancing:
+  # 默认策略: round_robin, random, least_connections, weighted_round_robin
+  default_strategy: round_robin
+  
+  # 是否启用健康检查过滤
+  health_check_filter: true
+  
+  # 是否启用版本过滤
+  version_filter: false
+
+# 安全配置
+security:
+  # 是否启用 TLS
+  tls_enabled: false
+  
+  # TLS 证书路径
+  tls_cert_file: ""
+  
+  # TLS 密钥路径
+  tls_key_file: ""
+  
+  # TLS CA 证书路径
+  tls_ca_file: ""
+  
+  # 是否启用认证
+  auth_enabled: false
+  
+  # 用户名
+  username: ""
+  
+  # 密码
+  password: ""
+
+# 日志配置
+logging:
+  # 日志级别: debug, info, warn, error
+  level: info
+  
+  # 是否启用详细日志
+  verbose: false
+
+# 性能配置
+performance:
+  # 最大并发请求数
+  max_concurrent_requests: 1000
+  
+  # 请求超时（秒）
+  request_timeout: 5
+  
+  # 连接超时（秒）
+  connection_timeout: 3
+  
+  # 保持连接
+  keep_alive: true
+  
+  # 保持连接超时（秒）
+  keep_alive_timeout: 30
+
+# 监控配置
+monitoring:
+  # 是否启用指标收集
+  metrics_enabled: true
+  
+  # 指标端口
+  metrics_port: 2381
+  
+  # 是否启用健康检查端点
+  health_endpoint_enabled: true
+  
+  # 健康检查端口
+  health_port: 2382

@@ -1,0 +1,85 @@
+framework:
+  name: golang-service
+  version: 1.0.0
+  language: golang
+  
+  network:
+    host: 0.0.0.0
+    port: 8081
+    maxConnections: 1000
+    readTimeout: 30s
+    writeTimeout: 30s
+    keepAlive: true
+  
+  registry:
+    type: etcd
+    endpoints:
+      - http://localhost:2379
+    namespace: /framework/services
+    ttl: 30
+    heartbeatInterval: 10
+  
+  protocols:
+    external:
+      - type: REST
+        enabled: true
+        port: 8081
+        path: /api
+      - type: WebSocket
+        enabled: true
+        port: 8081
+        path: /ws
+      - type: JSON-RPC
+        enabled: true
+        port: 8081
+        path: /jsonrpc
+      - type: MQTT
+        enabled: false
+        port: 1883
+    
+    internal:
+      - type: gRPC
+        enabled: true
+        port: 9001
+        serialization: PROTOBUF
+        compression: true
+      - type: JSON-RPC
+        enabled: true
+        serialization: JSON
+      - type: Custom
+        enabled: false
+  
+  connectionPool:
+    maxConnections: 100
+    minConnections: 10
+    idleTimeout: 5m
+    maxLifetime: 30m
+    connectionTimeout: 5s
+  
+  security:
+    tls:
+      enabled: false
+      certFile: ""
+      keyFile: ""
+      caFile: ""
+    authentication:
+      enabled: false
+      type: jwt
+    authorization:
+      enabled: false
+      type: rbac
+  
+  observability:
+    logging:
+      level: info
+      format: json
+      output: stdout
+    metrics:
+      enabled: true
+      port: 9001
+      path: /metrics
+    tracing:
+      enabled: true
+      exporter: jaeger
+      endpoint: http://localhost:14268/api/traces
+      samplingRate: 1.0

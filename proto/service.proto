@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package framework.service;
+
+import "common.proto";
+
+option java_package = "com.framework.proto";
+option java_outer_classname = "ServiceProto";
+option go_package = "github.com/framework/golang-sdk/proto";
+
+// 服务调用请求
+message CallRequest {
+  string service = 1;
+  string method = 2;
+  bytes payload = 3;
+  repeated framework.common.MessageHeader headers = 4;
+  int64 timeout = 5;
+}
+
+// 服务调用响应
+message CallResponse {
+  bytes payload = 1;
+  repeated framework.common.MessageHeader headers = 2;
+  framework.common.FrameworkError error = 3;
+}
+
+// 流式数据
+message StreamData {
+  bytes data = 1;
+  bool end_of_stream = 2;
+}
+
+// 框架服务接口
+service FrameworkService {
+  // 同步调用
+  rpc Call(CallRequest) returns (CallResponse);
+  
+  // 流式调用
+  rpc Stream(CallRequest) returns (stream StreamData);
+  
+  // 双向流
+  rpc BiStream(stream CallRequest) returns (stream CallResponse);
+  
+  // 健康检查
+  rpc HealthCheck(framework.common.HealthCheckResponse) returns (framework.common.HealthCheckResponse);
+}

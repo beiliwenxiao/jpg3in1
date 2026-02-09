@@ -1,0 +1,44 @@
+{
+    "name": "framework/multi-language-communication-framework",
+    "description": "PHP SDK for multi-language communication framework",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.1",
+        "hyperf/framework": "^3.1",
+        "hyperf/http-server": "^3.1",
+        "hyperf/websocket-server": "^3.1",
+        "hyperf/grpc-server": "^3.1",
+        "hyperf/grpc-client": "^3.1",
+        "hyperf/config": "^3.1",
+        "hyperf/logger": "^3.1",
+        "hyperf/pool": "^3.1",
+        "google/protobuf": "^3.25",
+        "grpc/grpc": "^1.60",
+        "firebase/php-jwt": "^6.10",
+        "open-telemetry/sdk": "^1.0",
+        "prometheus/client_php": "^2.7"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5",
+        "mockery/mockery": "^1.6",
+        "giorgiosironi/eris": "^0.14"
+    },
+    "autoload": {
+        "psr-4": {
+            "Framework\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "FrameworkTest\\": "tests/"
+        }
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "scripts": {
+        "test": "phpunit",
+        "cs-fix": "php-cs-fixer fix"
+    }
+}

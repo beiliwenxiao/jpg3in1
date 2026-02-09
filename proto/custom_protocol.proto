@@ -1,0 +1,260 @@
+syntax = "proto3";
+
+package framework.custom;
+
+import "common.proto";
+
+option java_package = "com.framework.proto";
+option java_outer_classname = "CustomProtocolProto";
+option go_package = "github.com/framework/golang-sdk/proto";
+
+// 自定义二进制协议帧
+// 设计目标：高性能、低延迟、紧凑的二进制格式
+message CustomFrame {
+  // 帧头
+  FrameHeader header = 1;
+  
+  // 帧体（实际数据）
+  bytes body = 2;
+  
+  // 帧尾（可选，用于校验）
+  FrameTrailer trailer = 3;
+}
+
+// 帧头
+message FrameHeader {
+  // 魔数（用于识别协议，固定值：0x46524D57，即 "FRMW"）
+  fixed32 magic = 1;
+  
+  // 协议版本
+  uint32 version = 2;
+  
+  // 帧类型
+  FrameType type = 3;
+  
+  // 帧标志
+  uint32 flags = 4;
+  
+  // 流 ID（用于多路复用）
+  uint32 stream_id = 5;
+  
+  // 帧体长度
+  uint32 body_length = 6;
+  
+  // 序列号（用于排序和去重）
+  uint64 sequence = 7;
+  
+  // 时间戳（毫秒）
+  int64 timestamp = 8;
+}
+
+// 帧类型
+enum FrameType {
+  FRAME_TYPE_UNSPECIFIED = 0;
+  
+  // 数据帧
+  DATA = 1;
+  
+  // 控制帧
+  PING = 2;
+  PONG = 3;
+  CLOSE = 4;
+  
+  // 流控制帧
+  WINDOW_UPDATE = 5;
+  
+  // 设置帧
+  SETTINGS = 6;
+  
+  // 错误帧
+  ERROR = 7;
+  
+  // 元数据帧
+  METADATA = 8;
+}
+
+// 帧标志（位标志）
+enum FrameFlags {
+  FRAME_FLAGS_UNSPECIFIED = 0;
+  
+  // 结束流标志
+  END_STREAM = 0x01;
+  
+  // 结束头部标志
+  END_HEADERS = 0x02;
+  
+  // 压缩标志
+  COMPRESSED = 0x04;
+  
+  // 加密标志
+  ENCRYPTED = 0x08;
+  
+  // 优先级标志
+  PRIORITY = 0x10;
+}
+
+// 帧尾（用于完整性校验）
+message FrameTrailer {
+  // CRC32 校验和
+  fixed32 checksum = 1;
+}
+
+// 数据帧体
+message DataFrame {
+  // 服务名称
+  string service = 1;
+  
+  // 方法名称
+  string method = 2;
+  
+  // 请求/响应数据
+  bytes data = 3;
+  
+  // 元数据
+  map<string, string> metadata = 4;
+  
+  // 追踪信息
+  string trace_id = 5;
+  string span_id = 6;
+}
+
+// 错误帧体
+message ErrorFrame {
+  // 错误码
+  framework.common.ErrorCode code = 1;
+  
+  // 错误消息
+  string message = 2;
+  
+  // 错误详情
+  bytes details = 3;
+  
+  // 流 ID（发生错误的流）
+  uint32 stream_id = 4;
+}
+
+// 设置帧体
+message SettingsFrame {
+  repeated Setting settings = 1;
+}
+
+// 设置项
+message Setting {
+  SettingKey key = 1;
+  uint32 value = 2;
+}
+
+// 设置键
+enum SettingKey {
+  SETTING_KEY_UNSPECIFIED = 0;
+  
+  // 最大并发流数
+  MAX_CONCURRENT_STREAMS = 1;
+  
+  // 初始窗口大小
+  INITIAL_WINDOW_SIZE = 2;
+  
+  // 最大帧大小
+  MAX_FRAME_SIZE = 3;
+  
+  // 最大头部列表大小
+  MAX_HEADER_LIST_SIZE = 4;
+  
+  // 启用推送
+  ENABLE_PUSH = 5;
+}
+
+// 窗口更新帧体
+message WindowUpdateFrame {
+  // 流 ID
+  uint32 stream_id = 1;
+  
+  // 窗口增量
+  uint32 window_size_increment = 2;
+}
+
+// Ping 帧体
+message PingFrame {
+  // Ping 数据（8 字节）
+  fixed64 data = 1;
+}
+
+// 元数据帧体
+message MetadataFrame {
+  // 元数据键值对
+  map<string, string> metadata = 1;
+  
+  // 压缩类型
+  CompressionType compression = 2;
+}
+
+// 压缩类型
+enum CompressionType {
+  COMPRESSION_TYPE_UNSPECIFIED = 0;
+  NONE = 1;
+  GZIP = 2;
+  SNAPPY = 3;
+  LZ4 = 4;
+  ZSTD = 5;
+}
+
+// 连接握手消息
+message HandshakeRequest {
+  // 协议版本
+  uint32 version = 1;
+  
+  // 客户端标识
+  string client_id = 2;
+  
+  // 支持的特性
+  repeated string features = 3;
+  
+  // 认证信息
+  bytes auth_token = 4;
+  
+  // 客户端元数据
+  map<string, string> metadata = 5;
+}
+
+// 握手响应
+message HandshakeResponse {
+  // 是否接受连接
+  bool accepted = 1;
+  
+  // 服务器版本
+  uint32 version = 2;
+  
+  // 服务器标识
+  string server_id = 3;
+  
+  // 支持的特性
+  repeated string features = 4;
+  
+  // 错误信息（如果拒绝）
+  string error_message = 5;
+  
+  // 服务器元数据
+  map<string, string> metadata = 6;
+}
+
+// 流状态
+enum StreamState {
+  STREAM_STATE_UNSPECIFIED = 0;
+  IDLE = 1;
+  OPEN = 2;
+  HALF_CLOSED_LOCAL = 3;
+  HALF_CLOSED_REMOTE = 4;
+  CLOSED = 5;
+}
+
+// 流优先级
+message StreamPriority {
+  // 依赖的流 ID
+  uint32 dependency = 1;
+  
+  // 权重（1-256）
+  uint32 weight = 2;
+  
+  // 是否独占
+  bool exclusive = 3;
+}

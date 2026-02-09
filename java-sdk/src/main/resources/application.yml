@@ -1,0 +1,97 @@
+framework:
+  name: ${SERVICE_NAME:java-service}
+  version: 1.0.0
+  language: java
+  
+  network:
+    host: ${SERVICE_HOST:0.0.0.0}
+    port: ${SERVICE_PORT:8080}
+    max-connections: 1000
+    read-timeout: 30000
+    write-timeout: 30000
+    keep-alive: true
+  
+  registry:
+    type: etcd
+    endpoints: ${ETCD_ENDPOINTS:http://localhost:2379}
+    namespace: /framework/services
+    ttl: 30
+    heartbeat-interval: 10
+  
+  protocols:
+    external:
+      - type: REST
+        enabled: true
+        port: 8080
+        path: /api
+      - type: WebSocket
+        enabled: true
+        port: 8080
+        path: /ws
+      - type: JSON-RPC
+        enabled: true
+        port: 8080
+        path: /jsonrpc
+      - type: MQTT
+        enabled: false
+        port: 1883
+    
+    internal:
+      - type: gRPC
+        enabled: true
+        port: 9000
+        serialization: PROTOBUF
+        compression: true
+      - type: JSON-RPC
+        enabled: true
+        serialization: JSON
+      - type: Custom
+        enabled: false
+  
+  connection-pool:
+    max-connections: 100
+    min-connections: 10
+    idle-timeout: 300000
+    max-lifetime: 1800000
+    connection-timeout: 5000
+  
+  security:
+    tls:
+      enabled: false
+      cert-file: ""
+      key-file: ""
+      ca-file: ""
+    authentication:
+      enabled: false
+      type: jwt
+    authorization:
+      enabled: false
+      type: rbac
+  
+  observability:
+    logging:
+      level: info
+      format: json
+      output: stdout
+    metrics:
+      enabled: true
+      port: 9000
+      path: /metrics
+    tracing:
+      enabled: true
+      exporter: jaeger
+      endpoint: http://localhost:14268/api/traces
+      sampling-rate: 1.0
+
+server:
+  port: ${SERVICE_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true

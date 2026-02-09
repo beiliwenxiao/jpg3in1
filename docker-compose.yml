@@ -1,0 +1,169 @@
+version: '3.8'
+
+services:
+  # etcd 服务注册中心
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.11
+    container_name: framework-etcd
+    ports:
+      - "2379:2379"
+      - "2380:2380"
+    environment:
+      # etcd 集群配置
+      - ETCD_NAME=etcd0
+      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://etcd:2380
+      - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+      - ETCD_ADVERTISE_CLIENT_URLS=http://etcd:2379
+      - ETCD_INITIAL_CLUSTER=etcd0=http://etcd:2380
+      - ETCD_INITIAL_CLUSTER_STATE=new
+      - ETCD_INITIAL_CLUSTER_TOKEN=etcd-cluster
+      # 数据目录
+      - ETCD_DATA_DIR=/etcd-data
+      # 自动压缩配置（保留最近1小时的历史版本）
+      - ETCD_AUTO_COMPACTION_MODE=periodic
+      - ETCD_AUTO_COMPACTION_RETENTION=1h
+      # 快照配置
+      - ETCD_SNAPSHOT_COUNT=10000
+      # 日志配置
+      - ETCD_LOG_LEVEL=info
+      # 框架命名空间配置（自定义环境变量，供应用使用）
+      - FRAMEWORK_NAMESPACE=/framework
+      - FRAMEWORK_SERVICE_TTL=30
+      - FRAMEWORK_HEARTBEAT_INTERVAL=10
+    volumes:
+      - etcd-data:/etcd-data
+      - ./docker/etcd:/etc/etcd/config:ro
+    networks:
+      - framework-network
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # MQTT Broker (用于测试 MQTT 协议)
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: framework-mosquitto
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./docker/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-logs:/mosquitto/log
+    networks:
+      - framework-network
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-i", "healthcheck", "-W", "3"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Prometheus (用于指标收集)
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: framework-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - framework-network
+
+  # Jaeger (用于分布式追踪)
+  jaeger:
+    image: jaegertracing/all-in-one:1.52
+    container_name: framework-jaeger
+    ports:
+      - "5775:5775/udp"
+      - "6831:6831/udp"
+      - "6832:6832/udp"
+      - "5778:5778"
+      - "16686:16686"
+      - "14268:14268"
+      - "14250:14250"
+      - "9411:9411"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - framework-network
+
+  # Java SDK 测试服务
+  java-service:
+    build:
+      context: ./java-sdk
+      dockerfile: Dockerfile
+    container_name: framework-java-service
+    ports:
+      - "8080:8080"
+      - "9000:9000"
+    environment:
+      - ETCD_ENDPOINTS=http://etcd:2379
+      - SERVICE_NAME=java-service
+      - SERVICE_PORT=8080
+    depends_on:
+      etcd:
+        condition: service_healthy
+    networks:
+      - framework-network
+    profiles:
+      - test
+
+  # Golang SDK 测试服务
+  golang-service:
+    build:
+      context: ./golang-sdk
+      dockerfile: Dockerfile
+    container_name: framework-golang-service
+    ports:
+      - "8081:8081"
+      - "9001:9001"
+    environment:
+      - ETCD_ENDPOINTS=http://etcd:2379
+      - SERVICE_NAME=golang-service
+      - SERVICE_PORT=8081
+    depends_on:
+      etcd:
+        condition: service_healthy
+    networks:
+      - framework-network
+    profiles:
+      - test
+
+  # PHP SDK 测试服务
+  php-service:
+    build:
+      context: ./php-sdk
+      dockerfile: Dockerfile
+    container_name: framework-php-service
+    ports:
+      - "8082:8082"
+      - "9002:9002"
+    environment:
+      - ETCD_ENDPOINTS=http://etcd:2379
+      - SERVICE_NAME=php-service
+      - SERVICE_PORT=8082
+    depends_on:
+      etcd:
+        condition: service_healthy
+    networks:
+      - framework-network
+    profiles:
+      - test
+
+volumes:
+  etcd-data:
+  mosquitto-data:
+  mosquitto-logs:
+  prometheus-data:
+
+networks:
+  framework-network:
+    driver: bridge

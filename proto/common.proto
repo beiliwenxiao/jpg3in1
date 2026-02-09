@@ -1,0 +1,128 @@
+syntax = "proto3";
+
+package framework.common;
+
+option java_package = "com.framework.proto";
+option java_outer_classname = "CommonProto";
+option go_package = "github.com/framework/golang-sdk/proto";
+
+// 消息类型
+enum MessageType {
+  MESSAGE_TYPE_UNSPECIFIED = 0;
+  REQUEST = 1;
+  RESPONSE = 2;
+  ERROR = 3;
+  EVENT = 4;
+  STREAM_START = 5;
+  STREAM_DATA = 6;
+  STREAM_END = 7;
+}
+
+// 序列化格式
+enum SerializationFormat {
+  SERIALIZATION_FORMAT_UNSPECIFIED = 0;
+  JSON = 1;
+  PROTOBUF = 2;
+  MSGPACK = 3;
+  CUSTOM = 4;
+}
+
+// 内部协议类型
+enum InternalProtocol {
+  INTERNAL_PROTOCOL_UNSPECIFIED = 0;
+  GRPC = 1;
+  JSON_RPC = 2;
+  CUSTOM_PROTOCOL = 3;
+}
+
+// 消息头
+message MessageHeader {
+  string key = 1;
+  string value = 2;
+}
+
+// 消息元数据
+message MessageMetadata {
+  string protocol = 1;
+  string encoding = 2;
+  string compression = 3;
+  int64 timeout = 4;
+  int32 retry_count = 5;
+  int32 priority = 6;
+}
+
+// 统一消息格式
+message Message {
+  string id = 1;
+  MessageType type = 2;
+  int64 timestamp = 3;
+  string trace_id = 4;
+  string span_id = 5;
+  ServiceInfo source = 6;
+  ServiceInfo destination = 7;
+  bytes payload = 8;
+  repeated MessageHeader headers = 9;
+  MessageMetadata metadata = 10;
+}
+
+// 服务信息
+message ServiceInfo {
+  string id = 1;
+  string name = 2;
+  string version = 3;
+  string language = 4;
+  string address = 5;
+  int32 port = 6;
+  repeated InternalProtocol protocols = 7;
+  map<string, string> metadata = 8;
+  int64 registered_at = 9;
+}
+
+// 错误码
+enum ErrorCode {
+  ERROR_CODE_UNSPECIFIED = 0;
+  
+  // 客户端错误 (4xx)
+  BAD_REQUEST = 400;
+  UNAUTHORIZED = 401;
+  FORBIDDEN = 403;
+  NOT_FOUND = 404;
+  TIMEOUT = 408;
+  
+  // 服务端错误 (5xx)
+  INTERNAL_ERROR = 500;
+  NOT_IMPLEMENTED = 501;
+  SERVICE_UNAVAILABLE = 503;
+  
+  // 框架错误 (6xx)
+  PROTOCOL_ERROR = 600;
+  SERIALIZATION_ERROR = 601;
+  ROUTING_ERROR = 602;
+  CONNECTION_ERROR = 603;
+}
+
+// 错误信息
+message FrameworkError {
+  ErrorCode code = 1;
+  string message = 2;
+  bytes details = 3;
+  FrameworkError cause = 4;
+  repeated string stack_trace = 5;
+  int64 timestamp = 6;
+  string service_id = 7;
+}
+
+// 健康状态
+enum HealthStatus {
+  HEALTH_STATUS_UNSPECIFIED = 0;
+  HEALTHY = 1;
+  UNHEALTHY = 2;
+  UNKNOWN = 3;
+}
+
+// 健康检查响应
+message HealthCheckResponse {
+  HealthStatus status = 1;
+  string message = 2;
+  map<string, string> details = 3;
+}

@@ -1,0 +1,115 @@
+# MQTT 协议处理器配置示例
+# 
+# 使用方法：
+# 1. 复制此文件内容到 application.yml
+# 2. 或者使用 spring.profiles.active=mqtt 激活此配置
+
+framework:
+  mqtt:
+    # 是否启用 MQTT 处理器
+    enabled: false
+    
+    # MQTT Broker 地址
+    # 支持的协议：
+    # - tcp://host:port  (明文连接)
+    # - ssl://host:port  (SSL/TLS 加密连接)
+    broker-url: tcp://localhost:1883
+    
+    # 客户端 ID（框架会自动添加随机后缀以避免冲突）
+    client-id: framework-mqtt-client
+    
+    # 用户名（可选，如果 Broker 需要认证）
+    username: 
+    
+    # 密码（可选，如果 Broker 需要认证）
+    password: 
+    
+    # 连接超时时间（秒）
+    connection-timeout: 30
+    
+    # 保持连接时间（秒）
+    # 客户端会定期发送 PING 消息以保持连接
+    keep-alive-interval: 60
+    
+    # 是否自动重连
+    # 如果连接丢失，客户端会自动尝试重新连接
+    automatic-reconnect: true
+    
+    # 是否清除会话
+    # true: 每次连接都是新会话，不保留订阅和未确认的消息
+    # false: 保留会话状态，断线重连后恢复订阅
+    clean-session: true
+    
+    # 默认 QoS 级别
+    # 0 = 最多一次（消息可能丢失）
+    # 1 = 至少一次（消息保证到达，但可能重复）
+    # 2 = 恰好一次（消息保证到达且不重复）
+    default-qos: 1
+    
+    # 订阅的主题列表
+    # 支持 MQTT 通配符：
+    # - + : 单层通配符，匹配一个层级
+    # - # : 多层通配符，匹配多个层级
+    subscribe-topics:
+      - framework/+/+           # 订阅所有服务和方法
+      - system/events/#         # 订阅所有系统事件
+      # - user/notifications/+  # 订阅用户通知
+      # - order/status/#        # 订阅订单状态变更
+
+---
+# 开发环境配置
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+framework:
+  mqtt:
+    enabled: true
+    broker-url: tcp://localhost:1883
+    client-id: framework-dev-client
+    default-qos: 1
+    subscribe-topics:
+      - framework/+/+
+      - test/#
+
+---
+# 测试环境配置
+spring:
+  config:
+    activate:
+      on-profile: test
+
+framework:
+  mqtt:
+    enabled: true
+    broker-url: tcp://test-mqtt-broker:1883
+    client-id: framework-test-client
+    username: test_user
+    password: test_password
+    default-qos: 1
+    subscribe-topics:
+      - framework/+/+
+
+---
+# 生产环境配置
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+framework:
+  mqtt:
+    enabled: true
+    broker-url: ssl://prod-mqtt-broker:8883
+    client-id: framework-prod-client
+    username: ${MQTT_USERNAME}
+    password: ${MQTT_PASSWORD}
+    connection-timeout: 60
+    keep-alive-interval: 120
+    automatic-reconnect: true
+    clean-session: false
+    default-qos: 2
+    subscribe-topics:
+      - framework/+/+
+      - system/events/#
