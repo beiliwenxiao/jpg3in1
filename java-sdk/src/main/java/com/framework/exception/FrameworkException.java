@@ -73,6 +73,13 @@ public class FrameworkException extends RuntimeException {
         return errorCode;
     }
     
+    /**
+     * getErrorCode 的便捷别名，保持向后兼容
+     */
+    public ErrorCode getCode() {
+        return errorCode;
+    }
+    
     public String getDetails() {
         return details;
     }

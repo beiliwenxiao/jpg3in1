@@ -69,7 +69,7 @@ public class WebSocketProtocolHandler extends AbstractWebSocketHandler implement
      * 处理文本消息
      */
     @Override
-    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
+    public void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
         String sessionId = session.getId();
         String payload = message.getPayload();
         
@@ -102,7 +102,7 @@ public class WebSocketProtocolHandler extends AbstractWebSocketHandler implement
      * 处理二进制消息
      */
     @Override
-    protected void handleBinaryMessage(WebSocketSession session, BinaryMessage message) throws Exception {
+    public void handleBinaryMessage(WebSocketSession session, BinaryMessage message) throws Exception {
         String sessionId = session.getId();
         ByteBuffer payload = message.getPayload();
         

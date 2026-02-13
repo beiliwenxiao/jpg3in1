@@ -96,7 +96,11 @@ public class CustomProtocolServer {
             
         } catch (Exception e) {
             logger.error("自定义协议服务端启动失败", e);
-            shutdown();
+            try {
+                shutdown();
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+            }
             throw new IOException("服务端启动失败: " + e.getMessage(), e);
         }
     }

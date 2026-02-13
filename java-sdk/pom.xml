@@ -190,11 +190,10 @@
             <version>${prometheus.version}</version>
         </dependency>
 
-        <!-- Logging -->
+        <!-- Logging - managed by Spring Boot BOM -->
         <dependency>
             <groupId>ch.qos.logback</groupId>
             <artifactId>logback-classic</artifactId>
-            <version>${logback.version}</version>
         </dependency>
 
         <!-- Testing -->

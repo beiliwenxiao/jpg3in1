@@ -425,7 +425,7 @@ class InternalProtocolPropertyTest {
     
     /**
      * 生成有效的请求数据
-     * 避免生成可能导致问题的特殊字符
+     * 生成有效的 JSON 字符串，确保 JSON-RPC 协议能正确解析
      */
     @Provide
     Arbitrary<String> validRequestData() {
@@ -433,7 +433,8 @@ class InternalProtocolPropertyTest {
                 .alpha()
                 .numeric()
                 .ofMinLength(1)
-                .ofMaxLength(100);
+                .ofMaxLength(100)
+                .map(s -> "\"" + s + "\"");
     }
     
     // ========== 辅助方法 ==========

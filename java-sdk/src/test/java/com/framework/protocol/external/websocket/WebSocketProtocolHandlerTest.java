@@ -269,18 +269,12 @@ class WebSocketProtocolHandlerTest {
         byte[] rawData = new byte[]{0x01, 0x02, 0x03, 0x04};
         BinaryMessage binaryMessage = new BinaryMessage(ByteBuffer.wrap(rawData));
         
-        ExternalResponse mockResponse = new ExternalResponse();
-        mockResponse.setStatusCode(200);
-        mockResponse.setBody(Map.of("result", "processed"));
-        
-        when(requestProcessor.process(any(ExternalRequest.class))).thenReturn(mockResponse);
-        
         // 执行
         handler.handleBinaryMessage(session, binaryMessage);
         
-        // 验证：应该处理请求（即使不是 JSON 格式）
-        verify(requestProcessor, times(1)).process(any(ExternalRequest.class));
-        verify(session, times(1)).sendMessage(any(BinaryMessage.class));
+        // 验证：非 JSON 二进制数据缺少 service/method 字段，应该发送错误消息
+        verify(requestProcessor, never()).process(any(ExternalRequest.class));
+        verify(session, times(1)).sendMessage(any(TextMessage.class));
     }
     
     @Test

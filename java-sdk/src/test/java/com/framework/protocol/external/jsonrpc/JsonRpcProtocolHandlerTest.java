@@ -72,7 +72,7 @@ class JsonRpcProtocolHandlerTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> responseBody = (Map<String, Object>) response.getBody();
         assertEquals("2.0", responseBody.get("jsonrpc"));
-        assertEquals(1, responseBody.get("id"));
+        assertEquals(1L, responseBody.get("id"));
         assertNotNull(responseBody.get("result"));
         assertNull(responseBody.get("error"));
         

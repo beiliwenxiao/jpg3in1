@@ -92,5 +92,6 @@ class CustomProtocolHandlerTest {
     @DisplayName("测试同步调用 - Echo")
     void testSyncCallEcho() {
         logger.info("=== 测试同步调用 - Echo ===");
-        
-       
+        // TODO: 待实现完整测试
+    }
+}

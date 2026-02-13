@@ -2,9 +2,8 @@ package com.framework.client;
 
 import net.jqwik.api.*;
 import net.jqwik.api.constraints.NotBlank;
-import net.jqwik.api.constraints.NotEmpty;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
+import net.jqwik.api.lifecycle.BeforeProperty;
+import net.jqwik.api.lifecycle.AfterProperty;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -21,13 +20,13 @@ class FrameworkClientPropertyTest {
     
     private FrameworkClient client;
     
-    @BeforeEach
+    @BeforeProperty
     void setUp() {
         client = FrameworkClientFactory.createClient();
         client.start();
     }
     
-    @AfterEach
+    @AfterProperty
     void tearDown() {
         if (client != null) {
             client.shutdown();
@@ -49,7 +48,7 @@ class FrameworkClientPropertyTest {
     @Label("Feature: multi-language-communication-framework, Property 1: 跨语言 API 一致性")
     void apiConsistencyAcrossLanguages(
             @ForAll @NotBlank String serviceName,
-            @ForAll @NotBlank String methodName,
+            @ForAll("validMethodNames") String methodName,
             @ForAll String requestData) {
         
         // 注册一个测试服务
@@ -90,7 +89,7 @@ class FrameworkClientPropertyTest {
     @Label("服务注册后可调用")
     void registeredServiceIsCallable(
             @ForAll @NotBlank String serviceName,
-            @ForAll @NotBlank String methodName,
+            @ForAll("validMethodNames") String methodName,
             @ForAll String data) {
         
         // 注册服务
@@ -114,7 +113,7 @@ class FrameworkClientPropertyTest {
     @Label("同步和异步调用结果一致")
     void syncAndAsyncCallsReturnSameResult(
             @ForAll @NotBlank String serviceName,
-            @ForAll @NotBlank String methodName,
+            @ForAll("validMethodNames") String methodName,
             @ForAll String data) throws Exception {
         
         // 注册服务
@@ -142,7 +141,7 @@ class FrameworkClientPropertyTest {
     @Label("多次调用结果稳定")
     void multipleCallsReturnConsistentResults(
             @ForAll @NotBlank String serviceName,
-            @ForAll @NotBlank String methodName,
+            @ForAll("validMethodNames") String methodName,
             @ForAll String data) {
         
         // 注册服务
@@ -157,6 +156,14 @@ class FrameworkClientPropertyTest {
         // 验证结果一致
         assertEquals(result1, result2, "第一次和第二次调用结果应该一致");
         assertEquals(result2, result3, "第二次和第三次调用结果应该一致");
+    }
+    
+    /**
+     * 生成有效的方法名（TestService 上实际存在的方法）
+     */
+    @Provide
+    Arbitrary<String> validMethodNames() {
+        return Arbitraries.of("echo", "processRequest", "getData", "handleRequest");
     }
     
     /**

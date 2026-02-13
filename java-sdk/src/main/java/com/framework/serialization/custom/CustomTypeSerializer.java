@@ -44,7 +44,7 @@ public class CustomTypeSerializer<T> extends AbstractSerializer {
     @SuppressWarnings("unchecked")
     public byte[] serialize(Object data) throws SerializationException {
         if (data == null) {
-            return new byte[0];
+            return null;
         }
         
         if (!targetType.isInstance(data)) {
@@ -70,7 +70,7 @@ public class CustomTypeSerializer<T> extends AbstractSerializer {
     @Override
     @SuppressWarnings("unchecked")
     public <R> R deserialize(byte[] data, Class<R> type) throws SerializationException {
-        if (data == null || data.length == 0) {
+        if (data == null) {
             return null;
         }
         
