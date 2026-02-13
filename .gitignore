@@ -1,0 +1,57 @@
+# IDE
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build outputs
+target/
+build/
+dist/
+out/
+bin/
+*.jar
+*.war
+*.ear
+
+# Dependencies
+node_modules/
+vendor/
+
+# Logs
+*.log
+logs/
+
+# Test coverage
+coverage/
+*.coverprofile
+
+# Environment
+.env
+.env.local
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Language specific
+# Java
+*.class
+.gradle/
+.mvn/
+
+# Go
+go.sum
+
+# PHP
+composer.lock
+.phpunit.result.cache
+
+# Docker
+.docker/
