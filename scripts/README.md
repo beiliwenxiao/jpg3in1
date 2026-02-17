@@ -1,319 +1,284 @@
-# 脚本使用说明
+# etcd 服务注册中心部署脚本
 
-本目录包含用于管理 etcd 服务注册中心和生成 Protocol Buffers 代码的脚本，支持 Linux/macOS (Bash) 和 Windows (PowerShell) 环境。
-
-## 前置要求
-
-### Linux/macOS
-- 已安装 `etcdctl` 命令行工具
-- Bash shell
-
-### Windows
-- 已安装 `etcdctl.exe` 并添加到 PATH 环境变量
-- PowerShell 5.1 或更高版本
-
-### 安装 etcdctl
-
-**Linux:**
-```bash
-# 下载 etcd
-ETCD_VER=v3.5.11
-wget https://github.com/etcd-io/etcd/releases/download/${ETCD_VER}/etcd-${ETCD_VER}-linux-amd64.tar.gz
-tar xzvf etcd-${ETCD_VER}-linux-amd64.tar.gz
-sudo mv etcd-${ETCD_VER}-linux-amd64/etcdctl /usr/local/bin/
-```
-
-**Windows:**
-1. 从 https://github.com/etcd-io/etcd/releases 下载 Windows 版本
-2. 解压并将 `etcdctl.exe` 添加到 PATH 环境变量
+本目录包含用于部署和管理 etcd 服务注册中心的脚本,支持 Windows 和 Linux 环境,支持 Docker 和原生安装两种模式。
 
 ## 脚本列表
 
-### Protocol Buffers 代码生成
+| 脚本 | 说明 | 支持平台 |
+|------|------|----------|
+| `start-etcd.ps1` | 启动 etcd (PowerShell) | Windows |
+| `start-etcd.sh` | 启动 etcd (Bash) | Linux/macOS |
+| `stop-etcd.ps1` | 停止 etcd (PowerShell) | Windows |
+| `stop-etcd.sh` | 停止 etcd (Bash) | Linux/macOS |
+| `health-check-etcd.ps1` | 健康检查 (PowerShell) | Windows |
+| `health-check-etcd.sh` | 健康检查 (Bash) | Linux/macOS |
 
-#### generate-proto (生成 Protocol Buffers 代码)
+## 快速开始
 
-从 `.proto` 定义文件生成 Java、Golang、PHP 三种语言的代码。
+### Windows 环境
 
-**前置要求:**
-- 已安装 Protocol Buffers 编译器 (protoc)
-- 已安装各语言的 protoc 插件（详见 [proto/README.md](../proto/README.md)）
+#### 使用 Docker 模式 (推荐用于开发)
 
-**Linux/macOS:**
+```powershell
+# 前台运行
+.\scripts\start-etcd.ps1
+
+# 后台运行
+.\scripts\start-etcd.ps1 -Detach
+
+# 健康检查
+.\scripts\health-check-etcd.ps1
+
+# 停止服务
+.\scripts\stop-etcd.ps1
+```
+
+#### 使用原生模式 (推荐用于生产)
+
+```powershell
+# 启动 etcd (首次运行会自动下载安装)
+.\scripts\start-etcd.ps1 -Mode native
+
+# 健康检查
+.\scripts\health-check-etcd.ps1
+
+# 停止服务
+.\scripts\stop-etcd.ps1
+```
+
+### Linux/macOS 环境
+
+#### 使用 Docker 模式 (推荐用于开发)
+
 ```bash
-# 进入 scripts 目录
-cd scripts
-
 # 添加执行权限
-chmod +x generate-proto.sh
+chmod +x scripts/*.sh
 
-# 运行脚本
-./generate-proto.sh
+# 前台运行
+./scripts/start-etcd.sh
+
+# 后台运行
+./scripts/start-etcd.sh -d
+
+# 健康检查
+./scripts/health-check-etcd.sh
+
+# 停止服务
+./scripts/stop-etcd.sh
 ```
 
-**Windows:**
-```powershell
-# 进入 scripts 目录
-cd scripts
-
-# 运行脚本
-.\generate-proto.ps1
-```
-
-生成的代码位置：
-- Java: `java-sdk/src/main/java/com/framework/proto/`
-- Golang: `golang-sdk/proto/`
-- PHP: `php-sdk/src/Proto/`
-
-详细说明请参考 [proto/README.md](../proto/README.md)。
-
----
-
-### etcd 服务注册中心管理
-
-### 1. etcd-health-check (健康检查)
-
-检查 etcd 集群的健康状态，包括端点健康、集群成员、读写操作等。
-
-**Linux/macOS:**
-```bash
-# 使用默认配置
-./scripts/etcd-health-check.sh
-
-# 自定义端点
-ETCD_ENDPOINTS=http://localhost:2379 ./scripts/etcd-health-check.sh
-
-# 自定义命名空间和超时
-ETCD_ENDPOINTS=http://localhost:2379 ETCD_NAMESPACE=/framework TIMEOUT=10 ./scripts/etcd-health-check.sh
-```
-
-**Windows:**
-```powershell
-# 使用默认配置
-.\scripts\etcd-health-check.ps1
-
-# 自定义端点
-.\scripts\etcd-health-check.ps1 -EtcdEndpoints "http://localhost:2379"
-
-# 自定义命名空间和超时
-.\scripts\etcd-health-check.ps1 -EtcdEndpoints "http://localhost:2379" -EtcdNamespace "/framework" -Timeout 10
-```
-
-### 2. etcd-init (初始化)
-
-初始化 etcd 服务注册中心，创建命名空间和设置配置。
-
-**Linux/macOS:**
-```bash
-# 使用默认配置
-./scripts/etcd-init.sh
-
-# 自定义端点
-ETCD_ENDPOINTS=http://localhost:2379 ./scripts/etcd-init.sh
-```
-
-**Windows:**
-```powershell
-# 使用默认配置
-.\scripts\etcd-init.ps1
-
-# 自定义端点
-.\scripts\etcd-init.ps1 -EtcdEndpoints "http://localhost:2379"
-```
-
-### 3. etcd-service-manager (服务管理)
-
-管理服务的注册、注销、查询和监听。
-
-**注意：** 此脚本目前仅提供 Bash 版本，Windows 用户可以使用 WSL 或 Git Bash 运行。
-
-#### 注册服务
+#### 使用原生模式 (推荐用于生产)
 
 ```bash
-./scripts/etcd-service-manager.sh register \
-  --name my-service \
-  --id instance-1 \
-  --language java \
-  --address localhost \
-  --port 8080 \
-  --version 1.0.0 \
-  --protocols grpc,rest \
-  --ttl 30
-```
+# 启动 etcd (首次运行会自动下载安装)
+./scripts/start-etcd.sh -m native
 
-#### 注销服务
+# 健康检查
+./scripts/health-check-etcd.sh
 
-```bash
-# 注销指定实例
-./scripts/etcd-service-manager.sh deregister --name my-service --id instance-1
-
-# 注销所有实例
-./scripts/etcd-service-manager.sh deregister --name my-service
-```
-
-#### 列出所有服务
-
-```bash
-./scripts/etcd-service-manager.sh list
-```
-
-#### 获取服务详情
-
-```bash
-# 获取所有实例
-./scripts/etcd-service-manager.sh get --name my-service
-
-# 获取指定实例
-./scripts/etcd-service-manager.sh get --name my-service --id instance-1
-```
-
-#### 监听服务变化
-
-```bash
-# 监听所有服务
-./scripts/etcd-service-manager.sh watch
-
-# 监听指定服务
-./scripts/etcd-service-manager.sh watch --name my-service
-```
-
-## 使用 Docker Compose
-
-### 启动 etcd
-
-```bash
-# Linux/macOS
-docker-compose up -d etcd
-
-# Windows (PowerShell)
-docker-compose up -d etcd
-```
-
-### 初始化 etcd
-
-等待 etcd 启动后（约 10-15 秒），运行初始化脚本：
-
-**Linux/macOS:**
-```bash
-./scripts/etcd-init.sh
-```
-
-**Windows:**
-```powershell
-.\scripts\etcd-init.ps1
-```
-
-### 健康检查
-
-**Linux/macOS:**
-```bash
-./scripts/etcd-health-check.sh
-```
-
-**Windows:**
-```powershell
-.\scripts\etcd-health-check.ps1
-```
-
-## 命名空间结构
-
-初始化后，etcd 中会创建以下命名空间：
-
-```
-/framework
-├── .namespace                    # 命名空间标记
-├── services/                     # 服务注册
-│   ├── .namespace
-│   ├── example-java-service/
-│   │   └── instance-1
-│   ├── example-golang-service/
-│   │   └── instance-1
-│   └── example-php-service/
-│       └── instance-1
-├── config/                       # 框架配置
-│   ├── .namespace
-│   ├── ttl/
-│   │   ├── service_registration
-│   │   ├── heartbeat_interval
-│   │   ├── discovery_cache
-│   │   ├── config_cache
-│   │   └── lock
-│   ├── service_registration/
-│   │   ├── auto_register
-│   │   ├── auto_deregister
-│   │   ├── health_check_enabled
-│   │   ├── health_check_interval
-│   │   ├── health_check_timeout
-│   │   └── health_check_failure_threshold
-│   └── load_balancing/
-│       ├── default_strategy
-│       ├── health_check_filter
-│       └── version_filter
-├── locks/                        # 分布式锁
-│   └── .namespace
-└── health/                       # 健康检查
-    └── .namespace
+# 停止服务
+./scripts/stop-etcd.sh
 ```
 
 ## 配置说明
 
-### TTL 配置
+### 环境变量
 
-- `service_registration`: 30秒 - 服务注册的租约时间
-- `heartbeat_interval`: 10秒 - 心跳间隔（应小于 service_registration）
-- `discovery_cache`: 60秒 - 服务发现缓存时间
-- `config_cache`: 300秒 - 配置缓存时间
-- `lock`: 60秒 - 分布式锁的租约时间
+可以通过环境变量自定义配置:
 
-### 服务注册配置
-
-- `auto_register`: true - 启用自动注册
-- `auto_deregister`: true - 启用自动注销
-- `health_check_enabled`: true - 启用健康检查
-- `health_check_interval`: 10秒 - 健康检查间隔
-- `health_check_timeout`: 5秒 - 健康检查超时
-- `health_check_failure_threshold`: 3 - 健康检查失败阈值
-
-### 负载均衡配置
-
-- `default_strategy`: round_robin - 默认负载均衡策略
-- `health_check_filter`: true - 启用健康检查过滤
-- `version_filter`: false - 禁用版本过滤
-
-## 故障排查
-
-### etcdctl 命令未找到
-
-确保已安装 etcd 客户端工具并添加到 PATH 环境变量。
-
-### 连接超时
-
-检查 etcd 是否正在运行：
-
-```bash
-docker ps | grep etcd
+```powershell
+# Windows PowerShell
+$env:ETCD_VERSION = "v3.5.11"
+$env:ETCD_DATA_DIR = ".\data\etcd"
+$env:ETCD_PORT = "2379"
+$env:ETCD_PEER_PORT = "2380"
+$env:FRAMEWORK_NAMESPACE = "/framework"
+$env:SERVICE_TTL = "30"
 ```
-
-检查端口是否可访问：
 
 ```bash
 # Linux/macOS
-curl http://localhost:2379/health
-
-# Windows (PowerShell)
-Invoke-WebRequest -Uri http://localhost:2379/health
+export ETCD_VERSION="v3.5.11"
+export ETCD_DATA_DIR="./data/etcd"
+export ETCD_PORT="2379"
+export ETCD_PEER_PORT="2380"
+export FRAMEWORK_NAMESPACE="/framework"
+export SERVICE_TTL="30"
 ```
 
-### 权限错误 (Linux/macOS)
+### 命名空间 (Namespace)
 
-为脚本添加执行权限：
+命名空间用于隔离不同应用的服务注册数据:
+
+- **默认值**: `/framework`
+- **用途**: 避免不同应用的服务注册冲突
+- **结构**: `/framework/services/<service-name>/<instance-id>`
+
+### TTL (Time To Live)
+
+TTL 定义服务注册的有效期,服务需要定期续约:
+
+- **默认值**: 30 秒
+- **用途**: 自动清理失效的服务实例
+- **建议**: 心跳间隔设置为 TTL/3
+
+## 部署模式对比
+
+| 特性 | Docker 模式 | 原生模式 |
+|------|------------|----------|
+| 安装复杂度 | 需要 Docker | 自动下载安装 |
+| 性能 | 有容器开销 | 无额外开销 |
+| 资源占用 | 较高 | 较低 |
+| 进程管理 | Docker 管理 | 系统进程 |
+| 适用场景 | 开发/测试 | 生产环境 |
+| 隔离性 | 容器隔离 | 进程隔离 |
+
+## 健康检查
+
+健康检查脚本会自动检测运行模式并执行以下检查:
+
+1. **进程/容器状态**: 检查 etcd 是否运行
+2. **端点健康**: 检查 etcd 端点是否响应
+3. **集群状态**: 检查集群信息和版本
+4. **命名空间**: 检查框架命名空间是否存在
+5. **服务列表**: 列出已注册的服务
+6. **性能指标**: 显示数据库大小和 Raft 索引
+
+示例输出:
+
+```
+==========================================
+etcd 服务注册中心健康检查
+==========================================
+
+检测到的运行模式: native
+
+检查 etcd 进程状态... 运行中 (PID: 12345)
+检查 etcd 端点健康状态... 健康
+检查 etcd 集群状态... 正常
+集群信息:
+  - 端点: http://localhost:2379, Leader: 8e9e05c52164694d, 版本: 3.5.11
+检查框架命名空间... 存在
+  - 已注册服务数量: 3
+  - 已注册服务列表:
+    * user-service
+    * order-service
+    * payment-service
+
+性能指标:
+  - DB 大小: 20480 bytes, Raft 索引: 15
+
+==========================================
+健康检查完成！
+==========================================
+```
+
+## 故障排查
+
+### 端口被占用
+
+如果启动失败提示端口被占用:
+
+```powershell
+# Windows - 查找占用端口的进程
+netstat -ano | findstr "2379"
+
+# Linux/macOS - 查找占用端口的进程
+lsof -i :2379
+```
+
+### 数据目录权限问题
+
+确保数据目录有写权限:
 
 ```bash
-chmod +x scripts/*.sh
+# 检查权限
+ls -la ./data/etcd
+
+# 修改权限 (如需要)
+chmod -R 755 ./data/etcd
 ```
 
-## 相关文档
+### 清理旧数据
+
+如果需要重新开始 (会丢失所有数据):
+
+```bash
+# 停止 etcd
+./scripts/stop-etcd.sh
+
+# 删除数据目录
+rm -rf ./data/etcd
+
+# 重新启动
+./scripts/start-etcd.sh -m native
+```
+
+## 原生安装说明
+
+### Windows
+
+脚本会自动执行以下操作:
+1. 从 GitHub 下载 etcd Windows 版本
+2. 解压到 `C:\Program Files\etcd`
+3. 添加到系统 PATH 环境变量
+4. 启动 etcd 服务
+
+**注意**: 首次安装可能需要管理员权限来修改系统 PATH。
+
+### Linux/macOS
+
+脚本会自动执行以下操作:
+1. 检测操作系统和架构
+2. 从 GitHub 下载对应版本的 etcd
+3. 解压并安装到 `/usr/local/bin`
+4. 启动 etcd 服务
+
+**注意**: 安装到 `/usr/local/bin` 需要 sudo 权限。
+
+## 验证安装
+
+安装完成后,可以使用以下命令验证:
+
+```bash
+# 检查 etcd 版本
+etcd --version
+
+# 检查 etcdctl 版本
+etcdctl version
+
+# 测试连接
+etcdctl --endpoints=http://localhost:2379 endpoint health
+```
+
+## 与框架集成
+
+etcd 部署完成后,可以在框架配置中使用:
+
+```yaml
+# application.yml
+framework:
+  registry:
+    type: etcd
+    endpoints:
+      - http://localhost:2379
+    namespace: /framework
+    ttl: 30
+```
+
+详细配置说明请参考: [etcd 配置文档](../docs/etcd-configuration.md)
+
+## 生产环境建议
+
+1. **使用原生模式**: 更好的性能和稳定性
+2. **部署集群**: 至少 3 个节点保证高可用
+3. **配置监控**: 监控健康状态和性能指标
+4. **定期备份**: 使用 `etcdctl snapshot save` 备份数据
+5. **调整 TTL**: 根据网络状况调整合适的 TTL 值
+6. **启用 TLS**: 生产环境启用 TLS 加密通信
+
+## 参考资料
 
 - [etcd 官方文档](https://etcd.io/docs/)
-- [etcdctl 命令参考](https://etcd.io/docs/latest/dev-guide/interacting_v3/)
-- [多语言通信框架设计文档](../.kiro/specs/multi-language-communication-framework/design.md)
+- [etcd 配置说明](../docs/etcd-configuration.md)
+- [服务注册与发现设计](../.kiro/specs/multi-language-communication-framework/design.md)

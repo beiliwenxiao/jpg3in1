@@ -25,8 +25,11 @@ type WebSocketConfig struct {
 
 // NewWebSocketProtocolHandler 创建 WebSocket 协议处理器
 func NewWebSocketProtocolHandler(config *WebSocketConfig) *WebSocketProtocolHandler {
+	// 为每个handler创建独立的命名服务器实例
+	serverName := fmt.Sprintf("websocket-%s-%d", config.Host, config.Port)
+	server := g.Server(serverName)
 	return &WebSocketProtocolHandler{
-		server: g.Server(),
+		server: server,
 		config: config,
 	}
 }
@@ -87,7 +90,7 @@ func (h *WebSocketProtocolHandler) handleWebSocket(r *ghttp.Request) {
 // handleMessage 处理 WebSocket 消息
 func (h *WebSocketProtocolHandler) handleMessage(msgType int, message []byte) []byte {
 	// 创建请求对象
-	request := &WebSocketMessage{
+	_ = &WebSocketMessage{
 		Type: msgType,
 		Data: message,
 	}

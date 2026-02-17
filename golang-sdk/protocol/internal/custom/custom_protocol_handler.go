@@ -122,7 +122,7 @@ func (h *CustomProtocolHandler) handleConnection(conn net.Conn) {
 		h.mu.RUnlock()
 		
 		if !exists {
-			glog.Warnf(ctx, "No handler for frame type: %s", frame.Header.Type)
+			// 没有找到对应的处理器，跳过该帧
 			continue
 		}
 		

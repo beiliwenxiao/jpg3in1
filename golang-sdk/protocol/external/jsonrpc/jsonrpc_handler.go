@@ -25,8 +25,11 @@ type JsonRpcConfig struct {
 
 // NewJsonRpcProtocolHandler 创建 JSON-RPC 协议处理器
 func NewJsonRpcProtocolHandler(config *JsonRpcConfig) *JsonRpcProtocolHandler {
+	// 为每个handler创建独立的命名服务器实例
+	serverName := fmt.Sprintf("jsonrpc-%s-%d", config.Host, config.Port)
+	server := g.Server(serverName)
 	return &JsonRpcProtocolHandler{
-		server: g.Server(),
+		server: server,
 		config: config,
 	}
 }

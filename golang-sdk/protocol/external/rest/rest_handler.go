@@ -3,7 +3,9 @@ package rest
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/gogf/gf/v2/frame/g"
 	"github.com/gogf/gf/v2/net/ghttp"
@@ -24,8 +26,11 @@ type RestConfig struct {
 
 // NewRestProtocolHandler 创建 REST 协议处理器
 func NewRestProtocolHandler(config *RestConfig) *RestProtocolHandler {
+	// 为每个handler创建独立的命名服务器实例
+	serverName := fmt.Sprintf("rest-%s-%d", config.Host, config.Port)
+	server := g.Server(serverName)
 	return &RestProtocolHandler{
-		server: g.Server(),
+		server: server,
 		config: config,
 	}
 }
@@ -33,7 +38,7 @@ func NewRestProtocolHandler(config *RestConfig) *RestProtocolHandler {
 // Start 启动 REST 服务器
 func (h *RestProtocolHandler) Start() error {
 	// 配置服务器
-	h.server.SetAddr(h.config.Host + ":" + string(rune(h.config.Port)))
+	h.server.SetAddr(h.config.Host + ":" + strconv.Itoa(h.config.Port))
 	
 	// 注册路由
 	h.registerRoutes()
