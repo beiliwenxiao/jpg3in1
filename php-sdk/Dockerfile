@@ -1,21 +1,34 @@
-FROM hyperf/hyperf:8.1-alpine-v3.18-swoole
+FROM php:8.1-cli-alpine
 
 WORKDIR /app
 
-# 安装依赖
-RUN apk add --no-cache protobuf-dev
+# Install system dependencies
+RUN apk add --no-cache \
+    curl \
+    libzip-dev \
+    oniguruma-dev \
+    openssl-dev \
+    && docker-php-ext-install \
+    mbstring \
+    zip \
+    pcntl \
+    sockets \
+    pdo \
+    pdo_mysql \
+    opcache
 
-# 复制 composer 文件
+# Install Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+# Copy composer files
 COPY composer.json composer.lock* ./
 
-# 安装 PHP 依赖
-RUN composer install --no-dev --optimize-autoloader
+# Install PHP dependencies
+RUN composer install --no-dev --optimize-autoloader --no-interaction
 
-# 复制源代码
+# Copy source code
 COPY . .
 
-# 暴露端口
-EXPOSE 8082 9002
+EXPOSE 8082
 
-# 启动应用
-ENTRYPOINT ["php", "bin/hyperf.php", "start"]
+CMD ["php", "-r", "echo 'PHP SDK ready';"]

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Framework\Client;
 
-use GuzzleHttp\Promise\PromiseInterface;
+use React\Promise\PromiseInterface;
 
 /**
  * 框架客户端接口
