@@ -1,24 +1,54 @@
 @echo off
-setlocal
+setlocal enabledelayedexpansion
 
-echo === 运行所有测试 ===
+echo === Running All SDK Tests ===
+echo.
 
-echo 测试 Java SDK...
-cd java-sdk
-call mvn test
-if %errorlevel% neq 0 exit /b %errorlevel%
-cd ..
+set PASS=0
+set FAIL=0
+set PHP_BIN=php
 
-echo 测试 Golang SDK...
-cd golang-sdk
-call go test ./...
-if %errorlevel% neq 0 exit /b %errorlevel%
-cd ..
+REM Allow override via environment variable
+if not "%PHP_HOME%"=="" set PHP_BIN=%PHP_HOME%\php.exe
 
-echo 测试 PHP SDK...
-cd php-sdk
-call composer test
-if %errorlevel% neq 0 exit /b %errorlevel%
-cd ..
+echo --- Java SDK ---
+call mvn -f java-sdk\pom.xml test -q
+if %errorlevel% equ 0 (
+    echo [PASS] Java SDK
+    set /a PASS+=1
+) else (
+    echo [FAIL] Java SDK
+    set /a FAIL+=1
+)
+echo.
 
-echo === 测试完成 ===
+echo --- Golang SDK ---
+pushd golang-sdk
+for /f "delims=" %%p in ('go list ./... ^| findstr /v "examples"') do set GOPKGS=!GOPKGS! %%p
+go test %GOPKGS% -timeout 120s
+popd
+if %errorlevel% equ 0 (
+    echo [PASS] Golang SDK
+    set /a PASS+=1
+) else (
+    echo [FAIL] Golang SDK
+    set /a FAIL+=1
+)
+echo.
+
+echo --- PHP SDK ---
+"%PHP_BIN%" php-sdk\vendor\bin\phpunit --configuration php-sdk\phpunit.xml --colors=never
+if %errorlevel% equ 0 (
+    echo [PASS] PHP SDK
+    set /a PASS+=1
+) else (
+    echo [FAIL] PHP SDK
+    set /a FAIL+=1
+)
+echo.
+
+echo ===================================
+echo Results: %PASS% passed, %FAIL% failed
+echo ===================================
+
+if %FAIL% neq 0 exit /b 1

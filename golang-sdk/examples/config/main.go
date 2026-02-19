@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	fmt.Println("=== Golang SDK 配置管理示例 ===\n")
+	fmt.Println("=== Golang SDK 配置管理示例 ===")
 
 	// 示例 1: 基本配置加载
 	fmt.Println("1. 基本配置加载:")

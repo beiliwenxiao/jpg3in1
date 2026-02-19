@@ -58,6 +58,15 @@ func NewEtcdRegistry(config *EtcdRegistryConfig) (*EtcdRegistry, error) {
 		return nil, fmt.Errorf("failed to create etcd client: %w", err)
 	}
 
+	// 立即做连通性检查，避免测试中懒连接导致的超时挂起
+	pingCtx, pingCancel := context.WithTimeout(context.Background(), config.DialTimeout)
+	defer pingCancel()
+	_, err = client.Status(pingCtx, config.Endpoints[0])
+	if err != nil {
+		_ = client.Close()
+		return nil, fmt.Errorf("etcd not reachable at %s: %w", config.Endpoints[0], err)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	registry := &EtcdRegistry{

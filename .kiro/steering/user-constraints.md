@@ -12,5 +12,7 @@ inclusion: always
 - 已经安装mvn和java17
 - 已经有java的运行环境，需要测试
 - 同时支持docker，以及支持原生安装。
+- 已经安装golang
+- 已经安装php8.1
 - 当前运行环境是win10。
 

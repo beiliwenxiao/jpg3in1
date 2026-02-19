@@ -34,7 +34,7 @@ func main() {
 		log.Fatalf("创建安全管理器失败: %v", err)
 	}
 
-	fmt.Println("=== 安全模块示例 ===\n")
+	fmt.Println("=== 安全模块示例 ===")
 
 	// 1. JWT认证示例
 	fmt.Println("1. JWT认证示例")

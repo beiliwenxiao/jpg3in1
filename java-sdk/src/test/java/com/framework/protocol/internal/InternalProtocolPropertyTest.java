@@ -462,11 +462,15 @@ class InternalProtocolPropertyTest {
             public byte[] handle(String method, byte[] payload, Map<String, String> headers) {
                 logger.debug("gRPC 测试服务处理请求: method={}, payloadLength={}", 
                            method, payload.length);
-                // 返回 echo 响应
-                String request = new String(payload);
-                String response = "{\"method\":\"" + method + "\",\"echo\":\"" + 
-                                 request.replace("\"", "\\\"") + "\"}";
-                return response.getBytes();
+                try {
+                    com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
+                    java.util.Map<String, Object> resp = new java.util.HashMap<>();
+                    resp.put("method", method);
+                    resp.put("echo", new String(payload));
+                    return om.writeValueAsBytes(resp);
+                } catch (Exception e) {
+                    return ("{\"error\":\"" + e.getMessage().replace("\"", "'") + "\"}").getBytes();
+                }
             }
         });
     }
@@ -480,11 +484,16 @@ class InternalProtocolPropertyTest {
             public byte[] handle(String method, byte[] payload, Map<String, String> headers) {
                 logger.debug("JSON-RPC 测试服务处理请求: method={}, payloadLength={}", 
                            method, payload.length);
-                // 返回 echo 响应
-                String request = new String(payload);
-                String response = "{\"method\":\"" + method + "\",\"echo\":\"" + 
-                                 request.replace("\"", "\\\"") + "\"}";
-                return response.getBytes();
+                // 使用Jackson序列化，避免手动拼接JSON导致的转义问题
+                try {
+                    com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
+                    java.util.Map<String, Object> resp = new java.util.HashMap<>();
+                    resp.put("method", method);
+                    resp.put("echo", new String(payload));
+                    return om.writeValueAsBytes(resp);
+                } catch (Exception e) {
+                    return ("{\"error\":\"" + e.getMessage().replace("\"", "'") + "\"}").getBytes();
+                }
             }
         });
     }
@@ -498,11 +507,15 @@ class InternalProtocolPropertyTest {
             public byte[] handle(String method, byte[] data, Map<String, String> metadata) {
                 logger.debug("自定义协议测试服务处理请求: method={}, dataLength={}", 
                            method, data.length);
-                // 返回 echo 响应
-                String request = new String(data);
-                String response = "{\"method\":\"" + method + "\",\"echo\":\"" + 
-                                 request.replace("\"", "\\\"") + "\"}";
-                return response.getBytes();
+                try {
+                    com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
+                    java.util.Map<String, Object> resp = new java.util.HashMap<>();
+                    resp.put("method", method);
+                    resp.put("echo", new String(data));
+                    return om.writeValueAsBytes(resp);
+                } catch (Exception e) {
+                    return ("{\"error\":\"" + e.getMessage().replace("\"", "'") + "\"}").getBytes();
+                }
             }
         });
     }

@@ -118,49 +118,71 @@ public class JsonRpcInternalServer {
         try {
             // 设置超时
             clientSocket.setSoTimeout(30000); // 30 秒
-            
+
             InputStream inputStream = clientSocket.getInputStream();
             OutputStream outputStream = clientSocket.getOutputStream();
-            
-            // 读取请求
-            BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-            StringBuilder requestBuilder = new StringBuilder();
+
+            // 用字节流读取 HTTP 头，避免字符编码问题
+            // HTTP 头本身是 ASCII，用 ISO-8859-1 逐行读取
+            BufferedReader headerReader = new BufferedReader(
+                    new InputStreamReader(inputStream, java.nio.charset.StandardCharsets.ISO_8859_1));
             String line;
             int contentLength = 0;
-            
-            // 读取 HTTP 头（如果有）
-            while ((line = reader.readLine()) != null && !line.isEmpty()) {
-                if (line.startsWith("Content-Length:")) {
+
+            while ((line = headerReader.readLine()) != null && !line.isEmpty()) {
+                String lower = line.toLowerCase();
+                if (lower.startsWith("content-length:")) {
                     contentLength = Integer.parseInt(line.substring(15).trim());
                 }
             }
-            
-            // 读取请求体
+
+            // 按字节数读取请求体，再用 UTF-8 解码
+            String requestBody;
             if (contentLength > 0) {
-                char[] buffer = new char[contentLength];
-                reader.read(buffer, 0, contentLength);
-                requestBuilder.append(buffer);
-            } else {
-                // 如果没有 Content-Length，读取到流结束
-                while (reader.ready() && (line = reader.readLine()) != null) {
-                    requestBuilder.append(line);
+                byte[] bodyBytes = new byte[contentLength];
+                int totalRead = 0;
+                // inputStream 此时已被 BufferedReader 包装，需要通过 headerReader 的底层读取
+                // 但 BufferedReader 可能已预读了部分字节，所以直接用 read(char[]) 读剩余字符
+                // 正确做法：重新用字节流读取，headerReader 内部缓冲区已消耗完 HTTP 头
+                // 由于 BufferedReader 默认缓冲 8192 字节，可能已读入部分 body
+                // 最安全的方式：用 headerReader 按字符读取 body（此时 body 是 JSON，UTF-8 安全字符）
+                // 但为了正确处理多字节字符，改用 mark/reset 或直接读字节
+                // 实际上 HTTP 头是纯 ASCII，BufferedReader 的 ISO-8859-1 不会消耗 body 的多字节字符
+                // 因为 BufferedReader.readLine() 在遇到空行后停止，body 字节仍在缓冲区中
+                // 通过 headerReader 继续读取 contentLength 个字符（ISO-8859-1 下1字节=1字符）
+                char[] charBuf = new char[contentLength];
+                int charRead = 0;
+                while (charRead < contentLength) {
+                    int r = headerReader.read(charBuf, charRead, contentLength - charRead);
+                    if (r == -1) break;
+                    charRead += r;
                 }
+                // 将 ISO-8859-1 字符数组转回字节，再用 UTF-8 解码
+                byte[] rawBytes = new String(charBuf, 0, charRead)
+                        .getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
+                requestBody = new String(rawBytes, java.nio.charset.StandardCharsets.UTF_8);
+            } else {
+                requestBody = "";
             }
-            
-            String requestBody = requestBuilder.toString();
+
             logger.debug("收到 JSON-RPC 请求: {}", requestBody);
-            
+
             // 处理 JSON-RPC 请求
             String responseBody = handleJsonRpcRequest(requestBody);
-            
+
+            // 使用 UTF-8 字节数计算 Content-Length
+            byte[] responseBytes = responseBody.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+
             // 发送 HTTP 响应
-            PrintWriter writer = new PrintWriter(outputStream, true);
-            writer.println("HTTP/1.1 200 OK");
-            writer.println("Content-Type: application/json");
-            writer.println("Content-Length: " + responseBody.length());
-            writer.println();
-            writer.print(responseBody);
+            PrintWriter writer = new PrintWriter(
+                    new OutputStreamWriter(outputStream, java.nio.charset.StandardCharsets.UTF_8), true);
+            writer.print("HTTP/1.1 200 OK\r\n");
+            writer.print("Content-Type: application/json; charset=utf-8\r\n");
+            writer.print("Content-Length: " + responseBytes.length + "\r\n");
+            writer.print("\r\n");
             writer.flush();
+            outputStream.write(responseBytes);
+            outputStream.flush();
             
         } catch (Exception e) {
             logger.error("处理 JSON-RPC 请求失败", e);
