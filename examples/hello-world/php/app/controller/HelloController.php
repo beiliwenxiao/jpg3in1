@@ -41,7 +41,7 @@ class HelloController
     public function hello(Request $request): Response
     {
         $goMsg   = $this->callRemote('http://127.0.0.1:8093/jsonrpc', 'hello.sayHello', 1);
-        $javaMsg = $this->callRemote('http://127.0.0.1:8092/jsonrpc', 'hello.sayHello', 2);
+        $javaMsg = $this->callRemote('http://127.0.0.1:8091/jsonrpc', 'hello.sayHello', 2);
 
         $json = json_encode([
             'php'  => 'Hello world, I am PHP',

@@ -1,6 +1,6 @@
 /**
  * Hello World - Java 示例
- * 启动一个 JSON-RPC 服务（端口 8092），同时调用 PHP（8091）和 Go（8093）的服务
+ * 启动一个 JSON-RPC 服务（端口 8091），同时调用 PHP（8092）和 Go（8093）的服务
  *
  * 复用框架的 JSON-RPC HTTP 处理逻辑（参考 JsonRpcInternalServer）
  * 无需 Spring Boot，使用 JDK 内置 HttpServer 即可独立运行
@@ -19,10 +19,10 @@ public class HelloWorld {
 
     private static final ObjectMapper mapper = new ObjectMapper();
 
-    // ---- 启动本地 JSON-RPC 服务（端口 8092）----
+    // ---- 启动本地 JSON-RPC 服务（端口 8091）----
 
     static void startJavaServer() throws IOException {
-        HttpServer server = HttpServer.create(new InetSocketAddress(8092), 0);
+        HttpServer server = HttpServer.create(new InetSocketAddress(8091), 0);
 
         // JSON-RPC 接口（供其他语言调用）
         server.createContext("/jsonrpc", exchange -> {
@@ -40,7 +40,7 @@ public class HelloWorld {
 
         // /hello 接口：调用其他两个语言并返回 JSON（供浏览器页面 fetch）
         server.createContext("/hello", exchange -> {
-            String phpMsg = callRemote("http://localhost:8091/jsonrpc", "hello.sayHello", 1);
+            String phpMsg = callRemote("http://localhost:8092/jsonrpc", "hello.sayHello", 1);
             String goMsg  = callRemote("http://localhost:8093/jsonrpc", "hello.sayHello", 2);
             String json = String.format(
                 "{\"java\":\"Hello world, I am JAVA\",\"php\":\"%s\",\"go\":\"%s\"}",
@@ -54,7 +54,7 @@ public class HelloWorld {
 
         // 浏览器首页
         server.createContext("/", exchange -> {
-            byte[] html = helloPage("Java", "#ED8B00", "http://localhost:8092/hello")
+            byte[] html = helloPage("Java", "#ED8B00", "/hello")
                               .getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "text/html; charset=utf-8");
             exchange.sendResponseHeaders(200, html.length);
@@ -62,8 +62,8 @@ public class HelloWorld {
         });
 
         server.start();
-        System.out.println("[Java] JSON-RPC 服务启动，监听端口 8092...");
-        System.out.println("[Java] 浏览器访问: http://localhost:8092");
+        System.out.println("[Java] JSON-RPC 服务启动，监听端口 8091...");
+        System.out.println("[Java] 浏览器访问: http://localhost:8091");
     }
 
     @SuppressWarnings("unchecked")
@@ -192,9 +192,9 @@ fetch('""" + apiURL + """
         // 2. 输出本地 Java 的问候
         System.out.println("\n[Java 本地] Hello world, I am JAVA");
 
-        // 3. 调用 PHP 服务（端口 8091）
+        // 3. 调用 PHP 服务（端口 8092）
         System.out.print("[Java 调用 PHP] 正在调用 PHP 服务... ");
-        System.out.println(callRemote("http://localhost:8091/jsonrpc", "hello.sayHello", 1));
+        System.out.println(callRemote("http://localhost:8092/jsonrpc", "hello.sayHello", 1));
 
         // 4. 调用 Go 服务（端口 8093）
         System.out.print("[Java 调用 Go] 正在调用 Go 服务... ");

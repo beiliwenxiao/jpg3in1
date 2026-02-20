@@ -1,6 +1,6 @@
 <?php
 return [
-    'listen'           => 'http://0.0.0.0:8091',
+    'listen'           => 'http://0.0.0.0:8092',
     'transport'        => 'tcp',
     'context'          => [],
     'name'             => 'HelloWorld-PHP',

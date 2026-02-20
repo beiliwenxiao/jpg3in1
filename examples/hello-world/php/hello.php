@@ -9,7 +9,7 @@
  *   Windows: php examples/hello-world/php/windows.php
  *   Linux:   php examples/hello-world/php/start.php start
  *
- * 端口：8091
+ * 端口：8092
  */
 
 // 根据平台自动选择入口

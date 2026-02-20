@@ -89,8 +89,8 @@ $worker->onWorkerStart = function ($w) {
     $w->onMessage = [$app, 'onMessage'];
     call_user_func([$app, 'onWorkerStart'], $w);
 
-    echo "[PHP/Webman] Worker 启动，监听端口 8091...\n";
-    echo "[PHP/Webman] 浏览器访问: http://localhost:8091\n";
+    echo "[PHP/Webman] Worker 启动，监听端口 8092...\n";
+    echo "[PHP/Webman] 浏览器访问: http://localhost:8092\n";
 };
 
 Worker::runAll();
@@ -106,7 +106,7 @@ echo "========================================\n";
 echo "  Hello World - PHP (Webman)\n";
 echo "========================================\n";
 echo "HTTP 由 Webman 处理，Worker 由 Workerman 管理\n";
-echo "浏览器访问: http://localhost:8091\n";
+echo "浏览器访问: http://localhost:8092\n";
 echo "按 Ctrl+C 停止\n\n";
 
 while (true) {

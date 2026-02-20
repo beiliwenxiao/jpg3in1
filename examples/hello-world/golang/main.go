@@ -1,6 +1,6 @@
 // Hello World - Golang 示例（GoFrame）
 // 使用 GoFrame ghttp.Server 处理 HTTP，复用框架已有依赖。
-// 端口 8093，与 PHP(8091)、Java(8092) 互调 hello.sayHello
+// 端口 8093，与 Java(8091)、PHP(8092) 互调 hello.sayHello
 package main
 
 import (
@@ -58,8 +58,8 @@ func main() {
 
 	// GET /hello — 调用其他两个语言，返回 JSON
 	s.BindHandler("GET:/hello", func(r *ghttp.Request) {
-		phpMsg := callRemote("http://127.0.0.1:8091/jsonrpc", "hello.sayHello", 1)
-		javaMsg := callRemote("http://127.0.0.1:8092/jsonrpc", "hello.sayHello", 2)
+		phpMsg := callRemote("http://127.0.0.1:8092/jsonrpc", "hello.sayHello", 1)
+		javaMsg := callRemote("http://127.0.0.1:8091/jsonrpc", "hello.sayHello", 2)
 		r.Response.WriteJsonExit(g.Map{
 			"go":   "Hello world, I am GoLang",
 			"php":  phpMsg,
@@ -82,9 +82,9 @@ func main() {
 		time.Sleep(500 * time.Millisecond)
 		fmt.Println("\n[Go 本地] Hello world, I am GoLang")
 		fmt.Print("[Go 调用 PHP] ")
-		fmt.Println(callRemote("http://127.0.0.1:8091/jsonrpc", "hello.sayHello", 1))
+		fmt.Println(callRemote("http://127.0.0.1:8092/jsonrpc", "hello.sayHello", 1))
 		fmt.Print("[Go 调用 Java] ")
-		fmt.Println(callRemote("http://127.0.0.1:8092/jsonrpc", "hello.sayHello", 2))
+		fmt.Println(callRemote("http://127.0.0.1:8091/jsonrpc", "hello.sayHello", 2))
 		fmt.Println("\n[Go] 服务运行中（Ctrl+C 退出）...")
 	}()
 
