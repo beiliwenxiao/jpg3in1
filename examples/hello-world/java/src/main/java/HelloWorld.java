@@ -40,21 +40,36 @@ public class HelloWorld {
             try (OutputStream os = exchange.getResponseBody()) { os.write(respBytes); }
         });
 
-        // /hello 接口：通过 RpcProxy 调用其他语言
+        // /hello 接口：通过 RpcProxy 调用其他语言（传递 name 参数）
         server.createContext("/hello", exchange -> {
+            // 从 query string 获取 name 参数，如 /hello?name=Kiro
+            String query = exchange.getRequestURI().getQuery();
+            String name = null;
+            if (query != null) {
+                for (String param : query.split("&")) {
+                    String[] kv = param.split("=", 2);
+                    if ("name".equals(kv[0]) && kv.length > 1 && !kv[1].isEmpty()) {
+                        name = URLDecoder.decode(kv[1], StandardCharsets.UTF_8);
+                    }
+                }
+            }
+            Map<String, String> rpcParams = (name != null) ? Map.of("name", name) : null;
+
+            String javaMsg = "Hello " + (name != null ? name : "world") + ", I am JAVA";
             String phpMsg, goMsg;
             try {
-                phpMsg = rpc.call("php-service", "hello.sayHello", String.class);
+                phpMsg = rpc.call("php-service", "hello.sayHello", rpcParams, String.class);
             } catch (Exception e) {
                 phpMsg = "调用失败: " + e.getMessage();
             }
             try {
-                goMsg = rpc.call("go-service", "hello.sayHello", String.class);
+                goMsg = rpc.call("go-service", "hello.sayHello", rpcParams, String.class);
             } catch (Exception e) {
                 goMsg = "调用失败: " + e.getMessage();
             }
             String json = String.format(
-                "{\"java\":\"Hello world, I am JAVA\",\"php\":\"%s\",\"go\":\"%s\"}",
+                "{\"java\":\"%s\",\"php\":\"%s\",\"go\":\"%s\"}",
+                javaMsg.replace("\"", "\\\""),
                 phpMsg.replace("\"", "\\\""), goMsg.replace("\"", "\\\"")
             );
             byte[] respBytes = json.getBytes(StandardCharsets.UTF_8);
@@ -86,7 +101,17 @@ public class HelloWorld {
 
             Object result;
             if ("hello.sayHello".equals(method)) {
-                result = "Hello world, I am JAVA";
+                // 支持 name 参数：params 可以是 {"name":"xxx"} 或 ["xxx"] 或 null
+                String name = "world";
+                Object params = req.get("params");
+                if (params instanceof Map) {
+                    Object n = ((Map<?,?>) params).get("name");
+                    if (n != null && !n.toString().isEmpty()) name = n.toString();
+                } else if (params instanceof java.util.List<?> list && !list.isEmpty()) {
+                    Object n = list.get(0);
+                    if (n != null && !n.toString().isEmpty()) name = n.toString();
+                }
+                result = "Hello " + name + ", I am JAVA";
             } else {
                 Map<String, Object> err = new HashMap<>();
                 err.put("code", -32601);
@@ -177,18 +202,20 @@ fetch('""" + apiURL + """
         // 3. 输出本地 Java 的问候
         System.out.println("\n[Java 本地] Hello world, I am JAVA");
 
-        // 4. 通过 RpcProxy 调用 PHP 服务
+        // 4. 通过 RpcProxy 调用 PHP 服务（带 name 参数）
         System.out.print("[Java → PHP] ");
         try {
-            System.out.println(rpc.call("php-service", "hello.sayHello", String.class));
+            System.out.println(rpc.call("php-service", "hello.sayHello",
+                    Map.of("name", "Java"), String.class));
         } catch (Exception e) {
             System.out.println("调用失败: " + e.getMessage());
         }
 
-        // 5. 通过 RpcProxy 调用 Go 服务
+        // 5. 通过 RpcProxy 调用 Go 服务（带 name 参数）
         System.out.print("[Java → Go] ");
         try {
-            System.out.println(rpc.call("go-service", "hello.sayHello", String.class));
+            System.out.println(rpc.call("go-service", "hello.sayHello",
+                    Map.of("name", "Java"), String.class));
         } catch (Exception e) {
             System.out.println("调用失败: " + e.getMessage());
         }

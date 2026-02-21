@@ -56,7 +56,7 @@ func loadRpcProxy(configPath string) *rpcProxy {
 	return p
 }
 
-func (p *rpcProxy) Call(service, method string) string {
+func (p *rpcProxy) Call(service, method string, params interface{}) string {
 	ep, ok := p.services[service]
 	if !ok {
 		return "未知服务: " + service
@@ -66,6 +66,7 @@ func (p *rpcProxy) Call(service, method string) string {
 	reqBody, _ := json.Marshal(map[string]interface{}{
 		"jsonrpc": "2.0",
 		"method":  method,
+		"params":  params,
 		"id":      1,
 	})
 
@@ -108,8 +109,9 @@ func main() {
 	// POST /jsonrpc — 供其他语言调用
 	s.BindHandler("POST:/jsonrpc", func(r *ghttp.Request) {
 		var req struct {
-			Method string `json:"method"`
-			ID     int    `json:"id"`
+			Method string      `json:"method"`
+			Params interface{} `json:"params"`
+			ID     int         `json:"id"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			r.Response.WriteStatus(400, "parse error")
@@ -118,7 +120,21 @@ func main() {
 		var result interface{}
 		switch req.Method {
 		case "hello.sayHello":
-			result = "Hello world, I am GoLang"
+			name := "world"
+			// 支持 params 为 {"name":"xxx"} 或 ["xxx"]
+			switch p := req.Params.(type) {
+			case map[string]interface{}:
+				if n, ok := p["name"].(string); ok && n != "" {
+					name = n
+				}
+			case []interface{}:
+				if len(p) > 0 {
+					if n, ok := p[0].(string); ok && n != "" {
+						name = n
+					}
+				}
+			}
+			result = "Hello " + name + ", I am GoLang"
 		default:
 			result = map[string]interface{}{"error": "method not found"}
 		}
@@ -129,12 +145,21 @@ func main() {
 		})
 	})
 
-	// GET /hello — 通过 RpcProxy 调用其他语言
+	// GET /hello — 通过 RpcProxy 调用其他语言（支持 ?name=xxx）
 	s.BindHandler("GET:/hello", func(r *ghttp.Request) {
+		name := r.GetQuery("name").String()
+		displayName := "world"
+		if name != "" {
+			displayName = name
+		}
+		var params interface{}
+		if name != "" {
+			params = map[string]string{"name": name}
+		}
 		r.Response.WriteJsonExit(g.Map{
-			"go":   "Hello world, I am GoLang",
-			"php":  rpc.Call("php-service", "hello.sayHello"),
-			"java": rpc.Call("java-service", "hello.sayHello"),
+			"go":   "Hello " + displayName + ", I am GoLang",
+			"php":  rpc.Call("php-service", "hello.sayHello", params),
+			"java": rpc.Call("java-service", "hello.sayHello", params),
 		})
 	})
 
@@ -151,8 +176,8 @@ func main() {
 	go func() {
 		time.Sleep(500 * time.Millisecond)
 		fmt.Println("\n[Go 本地] Hello world, I am GoLang")
-		fmt.Println("[Go → PHP] " + rpc.Call("php-service", "hello.sayHello"))
-		fmt.Println("[Go → Java] " + rpc.Call("java-service", "hello.sayHello"))
+		fmt.Println("[Go → PHP] " + rpc.Call("php-service", "hello.sayHello", map[string]string{"name": "GoLang"}))
+		fmt.Println("[Go → Java] " + rpc.Call("java-service", "hello.sayHello", map[string]string{"name": "GoLang"}))
 		fmt.Println("\n[Go] 服务运行中（Ctrl+C 退出）...")
 	}()
 

@@ -22,7 +22,11 @@ class HelloController
     {
         // 复用 php-sdk 的 JsonRpcHandler（本地服务注册）
         $this->rpc = new JsonRpcHandler();
-        $this->rpc->register('hello.sayHello', fn(array $p): string => 'Hello world, I am PHP');
+        $this->rpc->register('hello.sayHello', function(array $p): string {
+            $name = $p['name'] ?? ($p[0] ?? 'world');
+            if ($name === '' || $name === null) $name = 'world';
+            return "Hello {$name}, I am PHP";
+        });
 
         // 从配置文件加载远程服务定义
         $configPath = __DIR__ . '/../../config.yaml';
@@ -39,15 +43,19 @@ class HelloController
     }
 
     /**
-     * GET /hello — 通过 RpcProxy 调用其他语言
+     * GET /hello — 通过 RpcProxy 调用其他语言（支持 ?name=xxx）
      */
     public function hello(Request $request): Response
     {
-        $goMsg   = $this->safeCall('go-service', 'hello.sayHello');
-        $javaMsg = $this->safeCall('java-service', 'hello.sayHello');
+        $name = $request->get('name', '');
+        $displayName = $name !== '' ? $name : 'world';
+        $rpcParams = $name !== '' ? ['name' => $name] : null;
+
+        $goMsg   = $this->safeCall('go-service', 'hello.sayHello', $rpcParams);
+        $javaMsg = $this->safeCall('java-service', 'hello.sayHello', $rpcParams);
 
         $json = json_encode([
-            'php'  => 'Hello world, I am PHP',
+            'php'  => "Hello {$displayName}, I am PHP",
             'go'   => $goMsg,
             'java' => $javaMsg,
         ], JSON_UNESCAPED_UNICODE);
@@ -65,10 +73,10 @@ class HelloController
 
     // ---- 安全调用（捕获异常）----
 
-    private function safeCall(string $service, string $method): string
+    private function safeCall(string $service, string $method, mixed $params = null): string
     {
         try {
-            return (string)$this->proxy->call($service, $method);
+            return (string)$this->proxy->call($service, $method, $params);
         } catch (\Throwable $e) {
             return '调用失败: ' . $e->getMessage();
         }
