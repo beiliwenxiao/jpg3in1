@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package hello;
+
+option java_package = "com.example.grpc.hello";
+option java_outer_classname = "HelloProto";
+option java_multiple_files = true;
+option go_package = "./hellopb";
+
+// Greeter 服务 — 跨语言 gRPC 示例
+service Greeter {
+  // SayHello 方法：接收 name 参数，返回问候语
+  rpc SayHello (HelloRequest) returns (HelloReply);
+}
+
+message HelloRequest {
+  string name = 1;
+}
+
+message HelloReply {
+  string message = 1;
+}

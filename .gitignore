@@ -53,5 +53,11 @@ go.sum
 composer.lock
 .phpunit.result.cache
 
+# Tools (protoc etc.)
+tools/
+
+# Compiled binaries
+*.exe
+
 # Docker
 .docker/
