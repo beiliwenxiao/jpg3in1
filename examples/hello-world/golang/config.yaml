@@ -1,0 +1,17 @@
+framework:
+  name: hello-world-golang
+  version: 1.0.0
+  language: golang
+
+  # 本地服务端口
+  server:
+    port: 8093
+
+  # 远程服务定义
+  services:
+    php-service:
+      host: localhost
+      port: 8092
+    java-service:
+      host: localhost
+      port: 8091

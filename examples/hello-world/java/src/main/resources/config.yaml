@@ -1,0 +1,17 @@
+framework:
+  name: hello-world-java
+  version: 1.0.0
+  language: java
+
+  # 本地服务端口
+  server:
+    port: 8091
+
+  # 远程服务定义
+  services:
+    php-service:
+      host: localhost
+      port: 8092
+    go-service:
+      host: localhost
+      port: 8093

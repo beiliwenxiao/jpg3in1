@@ -2,15 +2,13 @@
 /**
  * HelloController - Webman HTTP 控制器
  *
- * 职责分工：
- *   Webman  → 处理所有 HTTP 路由（/jsonrpc、/hello、/）
- *   Workerman → 底层 Worker 进程管理（由 Webman 内部使用）
- *
+ * 使用框架的 RpcProxy 进行跨语言调用，服务地址通过 config.yaml 配置
  * 复用 php-sdk 的 JsonRpcHandler 处理 JSON-RPC 协议解析。
  */
 
 namespace app\controller;
 
+use Framework\Client\RpcProxy;
 use Framework\Protocol\External\JsonRpcHandler;
 use support\Request;
 use Webman\Http\Response;
@@ -18,12 +16,17 @@ use Webman\Http\Response;
 class HelloController
 {
     private JsonRpcHandler $rpc;
+    private RpcProxy $proxy;
 
     public function __construct()
     {
-        // 复用 php-sdk 的 JsonRpcHandler
+        // 复用 php-sdk 的 JsonRpcHandler（本地服务注册）
         $this->rpc = new JsonRpcHandler();
         $this->rpc->register('hello.sayHello', fn(array $p): string => 'Hello world, I am PHP');
+
+        // 从配置文件加载远程服务定义
+        $configPath = __DIR__ . '/../../config.yaml';
+        $this->proxy = RpcProxy::fromConfig($configPath);
     }
 
     /**
@@ -36,12 +39,12 @@ class HelloController
     }
 
     /**
-     * GET /hello — 调用其他两个语言，返回 JSON（供浏览器 fetch）
+     * GET /hello — 通过 RpcProxy 调用其他语言
      */
     public function hello(Request $request): Response
     {
-        $goMsg   = $this->callRemote('http://127.0.0.1:8093/jsonrpc', 'hello.sayHello', 1);
-        $javaMsg = $this->callRemote('http://127.0.0.1:8091/jsonrpc', 'hello.sayHello', 2);
+        $goMsg   = $this->safeCall('go-service', 'hello.sayHello');
+        $javaMsg = $this->safeCall('java-service', 'hello.sayHello');
 
         $json = json_encode([
             'php'  => 'Hello world, I am PHP',
@@ -60,24 +63,15 @@ class HelloController
         return new Response(200, ['Content-Type' => 'text/html; charset=utf-8'], $this->helloPage());
     }
 
-    // ---- 调用远程 JSON-RPC（同步，适合示例演示）----
+    // ---- 安全调用（捕获异常）----
 
-    private function callRemote(string $url, string $method, int $id): string
+    private function safeCall(string $service, string $method): string
     {
-        $payload = json_encode(['jsonrpc' => '2.0', 'method' => $method, 'id' => $id]);
-        $ctx = stream_context_create([
-            'http' => [
-                'method'        => 'POST',
-                'header'        => "Content-Type: application/json\r\n",
-                'content'       => $payload,
-                'timeout'       => 5,
-                'ignore_errors' => true,
-            ],
-        ]);
-        $resp = @file_get_contents($url, false, $ctx);
-        if ($resp === false) return '调用失败';
-        $data = json_decode($resp, true);
-        return $data['result'] ?? ('错误: ' . json_encode($data['error'] ?? '未知'));
+        try {
+            return (string)$this->proxy->call($service, $method);
+        } catch (\Throwable $e) {
+            return '调用失败: ' . $e->getMessage();
+        }
     }
 
     // ---- HTML 页面模板 ----

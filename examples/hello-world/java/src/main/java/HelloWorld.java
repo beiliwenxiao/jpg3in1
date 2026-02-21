@@ -2,11 +2,12 @@
  * Hello World - Java 示例
  * 启动一个 JSON-RPC 服务（端口 8091），同时调用 PHP（8092）和 Go（8093）的服务
  *
- * 复用框架的 JSON-RPC HTTP 处理逻辑（参考 JsonRpcInternalServer）
+ * 使用框架的 RpcProxy 进行跨语言调用，服务地址通过 config.yaml 配置
  * 无需 Spring Boot，使用 JDK 内置 HttpServer 即可独立运行
  */
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.framework.client.RpcProxy;
 import com.sun.net.httpserver.HttpServer;
 
 import java.io.*;
@@ -18,11 +19,12 @@ import java.util.Map;
 public class HelloWorld {
 
     private static final ObjectMapper mapper = new ObjectMapper();
+    private static RpcProxy rpc;
 
-    // ---- 启动本地 JSON-RPC 服务（端口 8091）----
+    // ---- 启动本地 JSON-RPC 服务 ----
 
-    static void startJavaServer() throws IOException {
-        HttpServer server = HttpServer.create(new InetSocketAddress(8091), 0);
+    static void startJavaServer(int port) throws IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
 
         // JSON-RPC 接口（供其他语言调用）
         server.createContext("/jsonrpc", exchange -> {
@@ -38,10 +40,19 @@ public class HelloWorld {
             try (OutputStream os = exchange.getResponseBody()) { os.write(respBytes); }
         });
 
-        // /hello 接口：调用其他两个语言并返回 JSON（供浏览器页面 fetch）
+        // /hello 接口：通过 RpcProxy 调用其他语言
         server.createContext("/hello", exchange -> {
-            String phpMsg = callRemote("http://localhost:8092/jsonrpc", "hello.sayHello", 1);
-            String goMsg  = callRemote("http://localhost:8093/jsonrpc", "hello.sayHello", 2);
+            String phpMsg, goMsg;
+            try {
+                phpMsg = rpc.call("php-service", "hello.sayHello", String.class);
+            } catch (Exception e) {
+                phpMsg = "调用失败: " + e.getMessage();
+            }
+            try {
+                goMsg = rpc.call("go-service", "hello.sayHello", String.class);
+            } catch (Exception e) {
+                goMsg = "调用失败: " + e.getMessage();
+            }
             String json = String.format(
                 "{\"java\":\"Hello world, I am JAVA\",\"php\":\"%s\",\"go\":\"%s\"}",
                 phpMsg.replace("\"", "\\\""), goMsg.replace("\"", "\\\"")
@@ -62,8 +73,8 @@ public class HelloWorld {
         });
 
         server.start();
-        System.out.println("[Java] JSON-RPC 服务启动，监听端口 8091...");
-        System.out.println("[Java] 浏览器访问: http://localhost:8091");
+        System.out.println("[Java] JSON-RPC 服务启动，监听端口 " + port + "...");
+        System.out.println("[Java] 浏览器访问: http://localhost:" + port);
     }
 
     @SuppressWarnings("unchecked")
@@ -96,40 +107,6 @@ public class HelloWorld {
         } catch (Exception e) {
             return "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32700,\"message\":\"Parse error\"},\"id\":null}";
         }
-    }
-
-    // ---- 调用远程 JSON-RPC 服务（带重试等待）----
-
-    static String callRemote(String url, String method, int id) {
-        Map<String, Object> req = new HashMap<>();
-        req.put("jsonrpc", "2.0");
-        req.put("method", method);
-        req.put("id", id);
-
-        // 最多等待 30 秒，每隔 1 秒重试一次
-        for (int i = 0; i < 30; i++) {
-            try {
-                byte[] payload = mapper.writeValueAsBytes(req);
-                HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
-                conn.setRequestMethod("POST");
-                conn.setDoOutput(true);
-                conn.setConnectTimeout(3000);
-                conn.setReadTimeout(3000);
-                conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-                try (OutputStream os = conn.getOutputStream()) {
-                    os.write(payload);
-                }
-                byte[] respBytes = conn.getInputStream().readAllBytes();
-                @SuppressWarnings("unchecked")
-                Map<String, Object> resp = mapper.readValue(respBytes, Map.class);
-                Object result = resp.get("result");
-                return result != null ? result.toString() : "错误: " + resp.get("error");
-            } catch (Exception e) {
-                System.out.printf("（等待服务就绪 %ds）\r", i + 1);
-                try { Thread.sleep(1000); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
-            }
-        }
-        return "等待超时，服务未就绪: " + url;
     }
 
     static String helloPage(String lang, String color, String apiURL) {
@@ -186,19 +163,35 @@ fetch('""" + apiURL + """
         System.out.println("  Hello World - Java 示例");
         System.out.println("========================================");
 
-        // 1. 启动本地 Java JSON-RPC 服务
-        startJavaServer();
+        // 1. 从配置文件加载远程服务定义
+        String configPath = "src/main/resources/config.yaml";
+        // 兼容从 jar 包外或项目根目录运行
+        if (!new File(configPath).exists()) {
+            configPath = "examples/hello-world/java/src/main/resources/config.yaml";
+        }
+        rpc = RpcProxy.fromConfig(configPath);
 
-        // 2. 输出本地 Java 的问候
+        // 2. 启动本地 Java JSON-RPC 服务
+        startJavaServer(8091);
+
+        // 3. 输出本地 Java 的问候
         System.out.println("\n[Java 本地] Hello world, I am JAVA");
 
-        // 3. 调用 PHP 服务（端口 8092）
-        System.out.print("[Java 调用 PHP] 正在调用 PHP 服务... ");
-        System.out.println(callRemote("http://localhost:8092/jsonrpc", "hello.sayHello", 1));
+        // 4. 通过 RpcProxy 调用 PHP 服务
+        System.out.print("[Java → PHP] ");
+        try {
+            System.out.println(rpc.call("php-service", "hello.sayHello", String.class));
+        } catch (Exception e) {
+            System.out.println("调用失败: " + e.getMessage());
+        }
 
-        // 4. 调用 Go 服务（端口 8093）
-        System.out.print("[Java 调用 Go] 正在调用 Go 服务... ");
-        System.out.println(callRemote("http://localhost:8093/jsonrpc", "hello.sayHello", 2));
+        // 5. 通过 RpcProxy 调用 Go 服务
+        System.out.print("[Java → Go] ");
+        try {
+            System.out.println(rpc.call("go-service", "hello.sayHello", String.class));
+        } catch (Exception e) {
+            System.out.println("调用失败: " + e.getMessage());
+        }
 
         System.out.println("\n[Java] 示例运行完毕，服务继续运行中（Ctrl+C 退出）...");
         Thread.currentThread().join();

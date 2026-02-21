@@ -18,11 +18,23 @@
     </properties>
 
     <dependencies>
-        <!-- 复用 java-sdk 已有的 Jackson 依赖 -->
+        <!-- 框架 SDK -->
+        <dependency>
+            <groupId>com.framework</groupId>
+            <artifactId>multi-language-communication-framework</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+        <!-- Jackson（SDK 已传递依赖，显式声明确保版本一致） -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
             <version>2.16.0</version>
+        </dependency>
+        <!-- YAML 配置解析 -->
+        <dependency>
+            <groupId>org.yaml</groupId>
+            <artifactId>snakeyaml</artifactId>
+            <version>2.2</version>
         </dependency>
     </dependencies>
 
@@ -48,6 +60,16 @@
                                     <mainClass>HelloWorld</mainClass>
                                 </transformer>
                             </transformers>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
                             <finalName>hello-world</finalName>
                         </configuration>
                     </execution>
