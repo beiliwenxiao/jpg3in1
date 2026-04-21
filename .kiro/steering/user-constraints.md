@@ -13,6 +13,17 @@ inclusion: always
 - 已经有java的运行环境，需要测试
 - 同时支持docker，以及支持原生安装。
 - 已经安装golang
-- 已经安装php8.1
+- 已经安装php8.1或php8.3
 - 当前运行环境是win10。
+
+## 开发环境架构
+
+- 项目文件存放在 Ubuntu 20.04 虚拟机中，通过 Samba 共享访问
+- Win10 本机作为 IDE（Kiro）的运行环境，通过 Samba 挂载访问虚拟机中的项目文件
+- 虚拟机（Ubuntu 20.04）是实际的代码运行和编译环境
+  - PHP 8.1或8.3 安装在虚拟机中（Win10 本机没有 PHP）
+  - Java 17、Maven、Golang 等也在虚拟机中运行
+  - composer、go build 等构建命令需要在虚拟机中执行
+- 因此，涉及到运行、编译、安装依赖等操作时，需要通过 SSH 到虚拟机执行，或者提供命令让用户在虚拟机终端中手动执行
+- Kiro 终端（PowerShell）无法直接运行 php、composer、go 等命令
 
