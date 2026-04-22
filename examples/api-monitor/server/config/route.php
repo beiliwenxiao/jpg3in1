@@ -9,6 +9,7 @@ Route::get('/api/ranking/slow', 'app\controller\MonitorController@rankingSlow');
 Route::get('/api/ranking/count','app\controller\MonitorController@rankingCount');
 Route::get('/api/realtime',     'app\controller\MonitorController@realtime');
 Route::get('/api/search',       'app\controller\MonitorController@search');
+Route::get('/api/dates',        'app\controller\MonitorController@dates');
 
 // 仪表盘页面
 Route::get('/',                 'app\controller\MonitorController@index');

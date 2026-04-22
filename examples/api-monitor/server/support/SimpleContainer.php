@@ -20,4 +20,12 @@ class SimpleContainer implements ContainerInterface
     {
         return class_exists($id);
     }
+
+    public function make(string $name, array $constructor = []): mixed
+    {
+        if (!class_exists($name)) {
+            throw new \RuntimeException("Class '$name' not found");
+        }
+        return new $name(...array_values($constructor));
+    }
 }

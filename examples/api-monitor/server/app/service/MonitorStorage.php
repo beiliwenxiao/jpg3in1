@@ -1,315 +1,192 @@
 <?php
 /**
- * MonitorStorage - 监控数据内存存储
+ * MonitorStorage - 监控数据存储代理
  *
- * 使用内存存储监控数据，支持按分钟/小时/天聚合统计。
- * 生产环境可替换为 Redis 或数据库存储。
+ * 根据配置自动选择存储后端（memory 或 redis）。
+ * - memory: 内存存储，无外部依赖，自动降为单 worker
+ * - redis:  Redis 存储，支持多 worker 共享数据
+ *
+ * 配置文件: config/monitor.php
+ *   'driver' => 'memory' | 'redis'
+ *
+ * 同时支持从日志文件读取历史数据（无论哪种驱动）。
  */
 
 namespace app\service;
 
-class MonitorStorage
+class MonitorStorage implements StorageInterface
 {
-    /** @var self|null */
     private static ?self $instance = null;
+    private StorageInterface $backend;
+    private string $driver;
 
-    /** @var array 原始请求记录（保留最近1小时） */
-    private array $records = [];
-
-    /** @var array 按分钟聚合 [key => [minute => stats]] */
-    private array $minuteStats = [];
-
-    /** @var array 按小时聚合 */
-    private array $hourStats = [];
-
-    /** @var array 按天聚合 */
-    private array $dayStats = [];
-
-    /** @var array 项目→类→方法 树形结构 */
-    private array $tree = [];
-
-    /** @var int 最大原始记录数 */
-    private int $maxRecords = 100000;
+    private function __construct(StorageInterface $backend, string $driver)
+    {
+        $this->backend = $backend;
+        $this->driver  = $driver;
+    }
 
     public static function getInstance(): self
     {
         if (self::$instance === null) {
-            self::$instance = new self();
+            $config = self::loadMonitorConfig();
+            $driver = $config['driver'] ?? 'memory';
+
+            if ($driver === 'redis' && extension_loaded('redis')) {
+                $redisConfig = self::loadRedisConfig();
+                try {
+                    $backend = new RedisStorage(
+                        $redisConfig['host'] ?? '127.0.0.1',
+                        $redisConfig['port'] ?? 6379,
+                        $redisConfig['password'] ?? '',
+                        $redisConfig['db'] ?? 0
+                    );
+                    echo "[监控] 使用 Redis 存储\n";
+                } catch (\Throwable $e) {
+                    echo "[监控] Redis 连接失败({$e->getMessage()})，回退到内存存储\n";
+                    $backend = new MemoryStorage();
+                    $driver = 'memory';
+                }
+            } else {
+                if ($driver === 'redis' && !extension_loaded('redis')) {
+                    echo "[监控] 未安装 redis 扩展，回退到内存存储\n";
+                } else {
+                    echo "[监控] 使用内存存储\n";
+                }
+                $backend = new MemoryStorage();
+                $driver = 'memory';
+            }
+
+            self::$instance = new self($backend, $driver);
         }
         return self::$instance;
     }
 
-    /**
-     * 写入一条监控记录
-     */
-    public function record(array $data): void
+    /** 获取当前驱动类型 */
+    public function getDriver(): string
     {
-        $project  = $data['project']  ?? 'default';
-        $class    = $data['class']    ?? 'Unknown';
-        $method   = $data['method']   ?? 'unknown';
-        $uri      = $data['uri']      ?? '/';
-        $duration = (float)($data['duration'] ?? 0);
-        $status   = (int)($data['status'] ?? 200);
-        $success  = $status >= 200 && $status < 400;
-        $time     = (int)($data['timestamp'] ?? time());
-
-        $key = "{$project}|{$class}|{$method}|{$uri}";
-
-        // 保存原始记录
-        $record = [
-            'project'   => $project,
-            'class'     => $class,
-            'method'    => $method,
-            'uri'       => $uri,
-            'duration'  => $duration,
-            'status'    => $status,
-            'success'   => $success,
-            'timestamp' => $time,
-            'key'       => $key,
-        ];
-        $this->records[] = $record;
-
-        // 限制记录数
-        if (count($this->records) > $this->maxRecords) {
-            $this->records = array_slice($this->records, -($this->maxRecords / 2));
-        }
-
-        // 更新树形结构
-        $this->tree[$project][$class][$method] = $uri;
-
-        // 聚合统计
-        $minute = date('Y-m-d H:i', $time);
-        $hour   = date('Y-m-d H', $time);
-        $day    = date('Y-m-d', $time);
-
-        $this->aggregate($this->minuteStats, $key, $minute, $duration, $success);
-        $this->aggregate($this->hourStats, $key, $hour, $duration, $success);
-        $this->aggregate($this->dayStats, $key, $day, $duration, $success);
+        return $this->driver;
     }
 
-    private function aggregate(array &$store, string $key, string $period, float $duration, bool $success): void
+    /** 是否为内存模式（需要单 worker） */
+    public function isMemoryMode(): bool
     {
-        if (!isset($store[$key][$period])) {
-            $store[$key][$period] = [
-                'count'        => 0,
-                'success'      => 0,
-                'fail'         => 0,
-                'total_time'   => 0.0,
-                'max_time'     => 0.0,
-                'min_time'     => PHP_FLOAT_MAX,
-            ];
-        }
-        $s = &$store[$key][$period];
-        $s['count']++;
-        $s['total_time'] += $duration;
-        if ($duration > $s['max_time']) $s['max_time'] = $duration;
-        if ($duration < $s['min_time']) $s['min_time'] = $duration;
-        if ($success) {
-            $s['success']++;
-        } else {
-            $s['fail']++;
-        }
+        return $this->driver === 'memory';
     }
 
-    /**
-     * 获取树形菜单数据
-     */
-    public function getTree(): array
+    private static function loadMonitorConfig(): array
     {
-        return $this->tree;
-    }
-
-    /**
-     * 获取仪表盘概览
-     */
-    public function getDashboard(string $date = ''): array
-    {
-        if (!$date) $date = date('Y-m-d');
-
-        $totalCount   = 0;
-        $totalSuccess = 0;
-        $totalFail    = 0;
-        $totalTime    = 0.0;
-
-        foreach ($this->dayStats as $key => $periods) {
-            if (isset($periods[$date])) {
-                $s = $periods[$date];
-                $totalCount   += $s['count'];
-                $totalSuccess += $s['success'];
-                $totalFail    += $s['fail'];
-                $totalTime    += $s['total_time'];
-            }
+        $configFile = config_path('monitor.php');
+        if (is_file($configFile)) {
+            return require $configFile;
         }
-
-        return [
-            'date'         => $date,
-            'total_count'  => $totalCount,
-            'success'      => $totalSuccess,
-            'fail'         => $totalFail,
-            'success_rate' => $totalCount > 0 ? round($totalSuccess / $totalCount * 100, 2) : 0,
-            'avg_time'     => $totalCount > 0 ? round($totalTime / $totalCount, 2) : 0,
-        ];
+        return ['driver' => 'memory'];
     }
 
-    /**
-     * 获取接口详情统计
-     */
-    public function getDetail(string $project, string $class, string $method, string $date = '', string $granularity = 'minute'): array
+    private static function loadRedisConfig(): array
     {
-        if (!$date) $date = date('Y-m-d');
+        $configFile = config_path('redis.php');
+        if (is_file($configFile)) {
+            return require $configFile;
+        }
+        return [];
+    }
 
+    // ========== StorageInterface 代理 ==========
+
+    public function record(array $data): void { $this->backend->record($data); }
+    public function getTree(): array { return $this->backend->getTree(); }
+    public function getDashboard(string $date = ''): array { return $this->backend->getDashboard($date); }
+    public function getDetail(string $project, string $class, string $method, string $date = '', string $granularity = 'minute'): array { return $this->backend->getDetail($project, $class, $method, $date, $granularity); }
+    public function getSlowRanking(string $date = '', int $limit = 20): array { return $this->backend->getSlowRanking($date, $limit); }
+    public function getCountRanking(string $date = '', int $limit = 20): array { return $this->backend->getCountRanking($date, $limit); }
+    public function getRealtime(): array { return $this->backend->getRealtime(); }
+    public function search(string $keyword, string $date = ''): array { return $this->backend->search($keyword, $date); }
+    public function hasData(string $date): bool { return $this->backend->hasData($date); }
+
+    // ========== 日志文件回退读取（与驱动无关） ==========
+
+    private function getLogDir(): string
+    {
+        return runtime_path('logs/monitor');
+    }
+
+    public function getDashboardFromLog(string $date): array
+    {
+        $log = MonitorLogger::readDayLog($this->getLogDir(), $date);
+        if ($log === null) {
+            return ['date' => $date, 'total_count' => 0, 'success' => 0, 'fail' => 0, 'success_rate' => 0, 'avg_time' => 0];
+        }
+        return $log['dashboard'] ?? ['date' => $date, 'total_count' => 0, 'success' => 0, 'fail' => 0, 'success_rate' => 0, 'avg_time' => 0];
+    }
+
+    public function getSlowRankingFromLog(string $date, int $limit = 20): array
+    {
+        $log = MonitorLogger::readDayLog($this->getLogDir(), $date);
+        if ($log === null) return [];
+        return array_slice($log['slow_ranking'] ?? [], 0, $limit);
+    }
+
+    public function getCountRankingFromLog(string $date, int $limit = 20): array
+    {
+        $log = MonitorLogger::readDayLog($this->getLogDir(), $date);
+        if ($log === null) return [];
+        return array_slice($log['count_ranking'] ?? [], 0, $limit);
+    }
+
+    public function getDetailFromLog(string $project, string $class, string $method, string $date): array
+    {
+        $log = MonitorLogger::readHourLog($this->getLogDir(), $date);
+        if ($log === null) return [];
         $result = [];
-        // 查找匹配的key
-        foreach ($this->tree as $p => $classes) {
-            if ($project && $p !== $project) continue;
-            foreach ($classes as $c => $methods) {
-                if ($class && $c !== $class) continue;
-                foreach ($methods as $m => $uri) {
-                    if ($method && $m !== $method) continue;
-                    $key = "{$p}|{$c}|{$m}|{$uri}";
-
-                    $store = match ($granularity) {
-                        'hour' => $this->hourStats,
-                        'day'  => $this->dayStats,
-                        default => $this->minuteStats,
-                    };
-
-                    $periods = $store[$key] ?? [];
-                    $filtered = [];
-                    foreach ($periods as $period => $stats) {
-                        if (str_starts_with($period, $date)) {
-                            $stats['avg_time'] = $stats['count'] > 0
-                                ? round($stats['total_time'] / $stats['count'], 2) : 0;
-                            $stats['success_rate'] = $stats['count'] > 0
-                                ? round($stats['success'] / $stats['count'] * 100, 2) : 0;
-                            if ($stats['min_time'] === PHP_FLOAT_MAX) $stats['min_time'] = 0;
-                            $filtered[$period] = $stats;
-                        }
-                    }
-                    ksort($filtered);
-
-                    $result[] = [
-                        'project' => $p,
-                        'class'   => $c,
-                        'method'  => $m,
-                        'uri'     => $uri,
-                        'periods' => $filtered,
-                    ];
-                }
-            }
+        foreach ($log['details'] ?? [] as $detail) {
+            if ($project && ($detail['project'] ?? '') !== $project) continue;
+            if ($class && ($detail['class'] ?? '') !== $class) continue;
+            if ($method && ($detail['method'] ?? '') !== $method) continue;
+            $result[] = $detail;
         }
         return $result;
     }
 
-    /**
-     * 慢速接口排行
-     */
-    public function getSlowRanking(string $date = '', int $limit = 20): array
+    public function getTreeFromLog(string $date): array
     {
-        if (!$date) $date = date('Y-m-d');
-
-        $ranking = [];
-        foreach ($this->dayStats as $key => $periods) {
-            if (!isset($periods[$date])) continue;
-            $s = $periods[$date];
-            $parts = explode('|', $key);
-            $ranking[] = [
-                'project'  => $parts[0] ?? '',
-                'class'    => $parts[1] ?? '',
-                'method'   => $parts[2] ?? '',
-                'uri'      => $parts[3] ?? '',
-                'avg_time' => $s['count'] > 0 ? round($s['total_time'] / $s['count'], 2) : 0,
-                'max_time' => round($s['max_time'], 2),
-                'count'    => $s['count'],
-            ];
-        }
-
-        usort($ranking, fn($a, $b) => $b['avg_time'] <=> $a['avg_time']);
-        return array_slice($ranking, 0, $limit);
+        $log = MonitorLogger::readDayLog($this->getLogDir(), $date);
+        if ($log === null) return [];
+        return $log['tree'] ?? [];
     }
 
-    /**
-     * 访问次数排行
-     */
-    public function getCountRanking(string $date = '', int $limit = 20): array
+    public function searchFromLog(string $keyword, string $date): array
     {
-        if (!$date) $date = date('Y-m-d');
-
-        $ranking = [];
-        foreach ($this->dayStats as $key => $periods) {
-            if (!isset($periods[$date])) continue;
-            $s = $periods[$date];
-            $parts = explode('|', $key);
-            $ranking[] = [
-                'project'      => $parts[0] ?? '',
-                'class'        => $parts[1] ?? '',
-                'method'       => $parts[2] ?? '',
-                'uri'          => $parts[3] ?? '',
-                'count'        => $s['count'],
-                'success'      => $s['success'],
-                'fail'         => $s['fail'],
-                'success_rate' => $s['count'] > 0 ? round($s['success'] / $s['count'] * 100, 2) : 0,
-            ];
-        }
-
-        usort($ranking, fn($a, $b) => $b['count'] <=> $a['count']);
-        return array_slice($ranking, 0, $limit);
-    }
-
-    /**
-     * 实时访问量（最近10分钟，按分钟）
-     */
-    public function getRealtime(): array
-    {
-        $now = time();
-        $result = [];
-
-        for ($i = 9; $i >= 0; $i--) {
-            $minute = date('Y-m-d H:i', $now - $i * 60);
-            $count = 0;
-            $success = 0;
-            $fail = 0;
-            foreach ($this->minuteStats as $key => $periods) {
-                if (isset($periods[$minute])) {
-                    $count   += $periods[$minute]['count'];
-                    $success += $periods[$minute]['success'];
-                    $fail    += $periods[$minute]['fail'];
-                }
-            }
-            $result[] = [
-                'time'    => $minute,
-                'count'   => $count,
-                'success' => $success,
-                'fail'    => $fail,
-            ];
-        }
-        return $result;
-    }
-
-    /**
-     * 搜索接口
-     */
-    public function search(string $keyword, string $date = ''): array
-    {
-        if (!$date) $date = date('Y-m-d');
+        $log = MonitorLogger::readDayLog($this->getLogDir(), $date);
+        if ($log === null) return [];
         $keyword = strtolower($keyword);
-
         $results = [];
-        foreach ($this->dayStats as $key => $periods) {
-            if (!str_contains(strtolower($key), $keyword)) continue;
-            if (!isset($periods[$date])) continue;
-            $s = $periods[$date];
-            $parts = explode('|', $key);
+        foreach (($log['slow_ranking'] ?? []) as $item) {
+            $searchStr = strtolower(($item['project'] ?? '') . ($item['class'] ?? '') . ($item['method'] ?? '') . ($item['uri'] ?? ''));
+            if (!str_contains($searchStr, $keyword)) continue;
             $results[] = [
-                'project'      => $parts[0] ?? '',
-                'class'        => $parts[1] ?? '',
-                'method'       => $parts[2] ?? '',
-                'uri'          => $parts[3] ?? '',
-                'count'        => $s['count'],
-                'success_rate' => $s['count'] > 0 ? round($s['success'] / $s['count'] * 100, 2) : 0,
-                'avg_time'     => $s['count'] > 0 ? round($s['total_time'] / $s['count'], 2) : 0,
+                'project' => $item['project'] ?? '', 'class' => $item['class'] ?? '',
+                'method' => $item['method'] ?? '', 'uri' => $item['uri'] ?? '',
+                'count' => $item['count'] ?? 0, 'success_rate' => 0, 'avg_time' => $item['avg_time'] ?? 0,
             ];
         }
         return $results;
+    }
+
+    public function getAvailableDates(): array
+    {
+        $today = date('Y-m-d');
+        $dates = [];
+        for ($i = -7; $i <= 7; $i++) {
+            $date = date('Y-m-d', strtotime("{$i} days"));
+            $hasBackend = $this->hasData($date);
+            $hasLog = is_file($this->getLogDir() . "/{$date}.json");
+            $dates[] = [
+                'date' => $date, 'has_data' => $hasBackend || $hasLog,
+                'source' => $hasBackend ? $this->driver : ($hasLog ? 'log' : 'none'),
+                'is_today' => $date === $today,
+            ];
+        }
+        return $dates;
     }
 }

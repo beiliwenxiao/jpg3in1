@@ -3,6 +3,7 @@
  * MonitorController - 监控仪表盘控制器
  *
  * 提供 API 接口和 Web 仪表盘页面。
+ * 查询历史数据时自动回退到日志文件。
  */
 
 namespace app\controller;
@@ -24,13 +25,25 @@ class MonitorController
     public function dashboard(Request $request): Response
     {
         $date = $request->get('date', date('Y-m-d'));
-        return $this->json($this->storage->getDashboard($date));
+        $data = $this->storage->getDashboard($date);
+        if ($data['total_count'] === 0) {
+            $logData = $this->storage->getDashboardFromLog($date);
+            if ($logData['total_count'] > 0) {
+                $data = $logData;
+            }
+        }
+        return $this->json($data);
     }
 
     /** 树形菜单 */
     public function tree(Request $request): Response
     {
-        return $this->json($this->storage->getTree());
+        $date = $request->get('date', '');
+        $tree = $this->storage->getTree();
+        if (empty($tree) && $date) {
+            $tree = $this->storage->getTreeFromLog($date);
+        }
+        return $this->json($tree);
     }
 
     /** 接口详情 */
@@ -41,7 +54,15 @@ class MonitorController
         $method      = $request->get('method', '');
         $date        = $request->get('date', date('Y-m-d'));
         $granularity = $request->get('granularity', 'minute');
-        return $this->json($this->storage->getDetail($project, $class, $method, $date, $granularity));
+
+        $data = $this->storage->getDetail($project, $class, $method, $date, $granularity);
+        if (empty($data) || (isset($data[0]) && empty($data[0]['periods']))) {
+            $logData = $this->storage->getDetailFromLog($project, $class, $method, $date);
+            if (!empty($logData)) {
+                $data = $logData;
+            }
+        }
+        return $this->json($data);
     }
 
     /** 慢速排行 */
@@ -49,7 +70,11 @@ class MonitorController
     {
         $date  = $request->get('date', date('Y-m-d'));
         $limit = (int)$request->get('limit', 20);
-        return $this->json($this->storage->getSlowRanking($date, $limit));
+        $data = $this->storage->getSlowRanking($date, $limit);
+        if (empty($data)) {
+            $data = $this->storage->getSlowRankingFromLog($date, $limit);
+        }
+        return $this->json($data);
     }
 
     /** 访问次数排行 */
@@ -57,7 +82,11 @@ class MonitorController
     {
         $date  = $request->get('date', date('Y-m-d'));
         $limit = (int)$request->get('limit', 20);
-        return $this->json($this->storage->getCountRanking($date, $limit));
+        $data = $this->storage->getCountRanking($date, $limit);
+        if (empty($data)) {
+            $data = $this->storage->getCountRankingFromLog($date, $limit);
+        }
+        return $this->json($data);
     }
 
     /** 实时访问量 */
@@ -74,10 +103,20 @@ class MonitorController
         return $this->json($this->storage->search($keyword, $date));
     }
 
+    /** 可用日期列表 */
+    public function dates(Request $request): Response
+    {
+        return $this->json($this->storage->getAvailableDates());
+    }
+
     /** Web 仪表盘首页 */
     public function index(Request $request): Response
     {
-        return new Response(200, ['Content-Type' => 'text/html; charset=utf-8'], $this->dashboardHtml());
+        $htmlFile = base_path() . '/public/index.html';
+        if (is_file($htmlFile)) {
+            return new Response(200, ['Content-Type' => 'text/html; charset=utf-8'], file_get_contents($htmlFile));
+        }
+        return new Response(404, [], 'Dashboard HTML not found');
     }
 
     private function json(mixed $data): Response
@@ -86,281 +125,5 @@ class MonitorController
             ['Content-Type' => 'application/json; charset=utf-8'],
             json_encode(['code' => 0, 'data' => $data], JSON_UNESCAPED_UNICODE)
         );
-    }
-
-    private function dashboardHtml(): string
-    {
-        return <<<'HTML'
-<!DOCTYPE html>
-<html lang="zh">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>API 性能监控</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f0f2f5;color:#333}
-.layout{display:flex;height:100vh}
-.sidebar{width:260px;background:#001529;color:#fff;overflow-y:auto;flex-shrink:0}
-.sidebar h2{padding:16px 20px;font-size:16px;border-bottom:1px solid #0d2137;background:#002140}
-.sidebar .project{margin:4px 0}
-.sidebar .project-name{padding:8px 20px;cursor:pointer;font-size:14px;color:#8baac4;transition:color .2s}
-.sidebar .project-name:hover{color:#fff}
-.sidebar .project-name.active{color:#1890ff;font-weight:600}
-.sidebar .class-list{display:none;padding-left:16px}
-.sidebar .class-list.open{display:block}
-.sidebar .class-name{padding:5px 20px;cursor:pointer;font-size:13px;color:#6b8da8;transition:color .2s}
-.sidebar .class-name:hover{color:#ccc}
-.sidebar .class-name.active{color:#40a9ff}
-.sidebar .method-list{display:none;padding-left:16px}
-.sidebar .method-list.open{display:block}
-.sidebar .method-item{padding:4px 20px;cursor:pointer;font-size:12px;color:#5a7d95;transition:all .2s}
-.sidebar .method-item:hover{color:#fff;background:#0d2137}
-.sidebar .method-item.active{color:#69c0ff;background:#0d2137}
-.main{flex:1;overflow-y:auto;padding:20px}
-.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;gap:12px;flex-wrap:wrap}
-.topbar h1{font-size:22px;color:#001529;white-space:nowrap}
-.search-box{display:flex;gap:8px;align-items:center}
-.search-box input,.search-box select{padding:6px 12px;border:1px solid #d9d9d9;border-radius:4px;font-size:14px}
-.search-box input[type=text]{width:200px}
-.search-box button{padding:6px 16px;background:#1890ff;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:14px}
-.search-box button:hover{background:#40a9ff}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:20px}
-.card{background:#fff;border-radius:8px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
-.card .label{font-size:13px;color:#8c8c8c;margin-bottom:6px}
-.card .value{font-size:28px;font-weight:700}
-.card .value.green{color:#52c41a}
-.card .value.red{color:#ff4d4f}
-.card .value.blue{color:#1890ff}
-.card .value.orange{color:#fa8c16}
-.panel{background:#fff;border-radius:8px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:20px}
-.panel h3{font-size:16px;margin-bottom:12px;color:#001529;border-bottom:1px solid #f0f0f0;padding-bottom:8px}
-.tab-bar{display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid #f0f0f0}
-.tab-bar .tab{padding:8px 20px;cursor:pointer;font-size:14px;color:#8c8c8c;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s}
-.tab-bar .tab.active{color:#1890ff;border-bottom-color:#1890ff;font-weight:600}
-.tab-bar .tab:hover{color:#1890ff}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th{background:#fafafa;padding:10px 12px;text-align:left;font-weight:600;color:#595959;border-bottom:1px solid #f0f0f0}
-td{padding:10px 12px;border-bottom:1px solid #f5f5f5}
-tr:hover td{background:#e6f7ff}
-.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
-.badge.ok{background:#f6ffed;color:#52c41a}
-.badge.warn{background:#fff7e6;color:#fa8c16}
-.badge.err{background:#fff1f0;color:#ff4d4f}
-.chart-bar{display:flex;align-items:end;gap:3px;height:80px;margin-top:8px}
-.chart-bar .bar{flex:1;background:#1890ff;border-radius:2px 2px 0 0;min-width:8px;position:relative;transition:height .3s}
-.chart-bar .bar:hover{background:#40a9ff}
-.chart-bar .bar .tip{display:none;position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:2px 6px;border-radius:3px;font-size:11px;white-space:nowrap}
-.chart-bar .bar:hover .tip{display:block}
-.empty{text-align:center;padding:40px;color:#bfbfbf;font-size:14px}
-</style>
-</head>
-<body>
-<div class="layout">
-  <div class="sidebar" id="sidebar">
-    <h2>📊 API 监控</h2>
-    <div id="treeContainer"><div class="empty" style="color:#5a7d95">加载中...</div></div>
-  </div>
-  <div class="main">
-    <div class="topbar">
-      <h1 id="pageTitle">仪表盘概览</h1>
-      <div class="search-box">
-        <input type="text" id="searchInput" placeholder="搜索接口...">
-        <input type="date" id="dateInput">
-        <button onclick="doSearch()">搜索</button>
-        <button onclick="loadDashboard()" style="background:#52c41a">概览</button>
-      </div>
-    </div>
-    <div id="content"><div class="empty">加载中...</div></div>
-  </div>
-</div>
-<script>
-const $ = s => document.querySelector(s);
-const $$ = s => document.querySelectorAll(s);
-let currentDate = new Date().toISOString().slice(0,10);
-let currentProject='', currentClass='', currentMethod='';
-
-$('#dateInput').value = currentDate;
-
-async function api(url) {
-  const r = await fetch(url);
-  const j = await r.json();
-  return j.data;
-}
-
-// 加载树形菜单
-async function loadTree() {
-  const tree = await api('/api/tree');
-  let html = '';
-  for (const [proj, classes] of Object.entries(tree)) {
-    html += `<div class="project">
-      <div class="project-name" onclick="toggleProject(this,'${proj}')">${proj}</div>
-      <div class="class-list">`;
-    for (const [cls, methods] of Object.entries(classes)) {
-      html += `<div class="class-name" onclick="toggleClass(this,'${proj}','${cls}')">${cls}
-        <div class="method-list">`;
-      for (const [mtd, uri] of Object.entries(methods)) {
-        html += `<div class="method-item" onclick="event.stopPropagation();selectMethod('${proj}','${cls}','${mtd}')" title="${uri}">${mtd}</div>`;
-      }
-      html += '</div></div>';
-    }
-    html += '</div></div>';
-  }
-  $('#treeContainer').innerHTML = html || '<div class="empty" style="color:#5a7d95">暂无数据</div>';
-}
-
-function toggleProject(el, proj) {
-  const list = el.nextElementSibling;
-  list.classList.toggle('open');
-  el.classList.toggle('active');
-}
-function toggleClass(el, proj, cls) {
-  event.stopPropagation();
-  const list = el.querySelector('.method-list');
-  list.classList.toggle('open');
-  el.classList.toggle('active');
-}
-function selectMethod(proj, cls, mtd) {
-  $$('.method-item').forEach(e => e.classList.remove('active'));
-  event.target.classList.add('active');
-  currentProject=proj; currentClass=cls; currentMethod=mtd;
-  loadDetail(proj, cls, mtd);
-}
-
-// 仪表盘概览
-async function loadDashboard() {
-  currentProject=''; currentClass=''; currentMethod='';
-  $$('.method-item').forEach(e => e.classList.remove('active'));
-  $('#pageTitle').textContent = '仪表盘概览';
-  const d = await api(`/api/dashboard?date=${currentDate}`);
-  const rt = await api('/api/realtime');
-  const slow = await api(`/api/ranking/slow?date=${currentDate}&limit=10`);
-  const top = await api(`/api/ranking/count?date=${currentDate}&limit=10`);
-
-  let maxRt = Math.max(...rt.map(r=>r.count), 1);
-  let rtBars = rt.map(r => {
-    let h = Math.max(r.count/maxRt*70, 2);
-    return `<div class="bar" style="height:${h}px"><span class="tip">${r.time.slice(11)} : ${r.count}次</span></div>`;
-  }).join('');
-
-  let html = `<div class="cards">
-    <div class="card"><div class="label">今日总请求</div><div class="value blue">${d.total_count}</div></div>
-    <div class="card"><div class="label">成功次数</div><div class="value green">${d.success}</div></div>
-    <div class="card"><div class="label">失败次数</div><div class="value red">${d.fail}</div></div>
-    <div class="card"><div class="label">成功率</div><div class="value green">${d.success_rate}%</div></div>
-    <div class="card"><div class="label">平均耗时</div><div class="value orange">${d.avg_time}ms</div></div>
-  </div>
-  <div class="panel"><h3>📈 实时访问量（最近10分钟）</h3><div class="chart-bar">${rtBars}</div></div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-    <div class="panel"><h3>🐢 慢速接口 TOP10</h3>${rankTable(slow,'slow')}</div>
-    <div class="panel"><h3>🔥 访问量 TOP10</h3>${rankTable(top,'count')}</div>
-  </div>`;
-  $('#content').innerHTML = html;
-}
-
-function rankTable(list, type) {
-  if (!list.length) return '<div class="empty">暂无数据</div>';
-  let rows = list.map((r,i) => {
-    let badge = type==='slow'
-      ? (r.avg_time>1000?'err':r.avg_time>500?'warn':'ok')
-      : (r.success_rate<90?'err':r.success_rate<99?'warn':'ok');
-    let val = type==='slow' ? `${r.avg_time}ms` : r.count;
-    let extra = type==='slow' ? `<td>${r.max_time}ms</td><td>${r.count}</td>`
-      : `<td>${r.success}</td><td>${r.fail}</td><td><span class="badge ${badge}">${r.success_rate}%</span></td>`;
-    return `<tr><td>${i+1}</td><td title="${r.uri}">${r.class}.${r.method}</td><td><span class="badge ${badge}">${val}</span></td>${extra}</tr>`;
-  }).join('');
-  let th = type==='slow'
-    ? '<th>#</th><th>接口</th><th>平均耗时</th><th>最大耗时</th><th>次数</th>'
-    : '<th>#</th><th>接口</th><th>次数</th><th>成功</th><th>失败</th><th>成功率</th>';
-  return `<table><thead><tr>${th}</tr></thead><tbody>${rows}</tbody></table>`;
-}
-
-// 接口详情
-async function loadDetail(proj, cls, mtd) {
-  $('#pageTitle').textContent = `${proj} / ${cls} / ${mtd}`;
-  const data = await api(`/api/detail?project=${proj}&class=${cls}&method=${mtd}&date=${currentDate}&granularity=minute`);
-  if (!data.length) { $('#content').innerHTML='<div class="empty">暂无数据</div>'; return; }
-  const info = data[0];
-  const periods = info.periods;
-  const keys = Object.keys(periods);
-
-  let totalCount=0, totalSuccess=0, totalFail=0, totalTime=0, maxTime=0;
-  keys.forEach(k => {
-    const s=periods[k];
-    totalCount+=s.count; totalSuccess+=s.success; totalFail+=s.fail;
-    totalTime+=s.total_time; if(s.max_time>maxTime) maxTime=s.max_time;
-  });
-  let avgTime = totalCount>0 ? (totalTime/totalCount).toFixed(2) : 0;
-  let successRate = totalCount>0 ? (totalSuccess/totalCount*100).toFixed(2) : 0;
-
-  let maxC = Math.max(...keys.map(k=>periods[k].count),1);
-  let bars = keys.map(k => {
-    let s=periods[k], h=Math.max(s.count/maxC*70,2);
-    return `<div class="bar" style="height:${h}px"><span class="tip">${k.slice(11)} ${s.count}次 ${s.avg_time}ms</span></div>`;
-  }).join('');
-
-  let rows = keys.map(k => {
-    let s=periods[k];
-    let badge = s.success_rate<90?'err':s.success_rate<99?'warn':'ok';
-    return `<tr><td>${k}</td><td>${s.count}</td><td>${s.success}</td><td>${s.fail}</td>
-      <td><span class="badge ${badge}">${s.success_rate}%</span></td>
-      <td>${s.avg_time}ms</td><td>${s.max_time.toFixed(2)}ms</td><td>${s.min_time.toFixed(2)}ms</td></tr>`;
-  }).join('');
-
-  let html = `<div class="cards">
-    <div class="card"><div class="label">总请求</div><div class="value blue">${totalCount}</div></div>
-    <div class="card"><div class="label">成功</div><div class="value green">${totalSuccess}</div></div>
-    <div class="card"><div class="label">失败</div><div class="value red">${totalFail}</div></div>
-    <div class="card"><div class="label">成功率</div><div class="value green">${successRate}%</div></div>
-    <div class="card"><div class="label">平均耗时</div><div class="value orange">${avgTime}ms</div></div>
-    <div class="card"><div class="label">最大耗时</div><div class="value red">${maxTime.toFixed(2)}ms</div></div>
-  </div>
-  <div class="panel"><h3>📈 访问趋势</h3><div class="chart-bar">${bars}</div></div>
-  <div class="panel"><h3>📋 分时统计</h3>
-    <table><thead><tr><th>时间</th><th>次数</th><th>成功</th><th>失败</th><th>成功率</th><th>平均耗时</th><th>最大</th><th>最小</th></tr></thead>
-    <tbody>${rows}</tbody></table>
-  </div>`;
-  $('#content').innerHTML = html;
-}
-
-// 搜索
-async function doSearch() {
-  const kw = $('#searchInput').value.trim();
-  currentDate = $('#dateInput').value || currentDate;
-  if (!kw) { loadDashboard(); return; }
-  $('#pageTitle').textContent = `搜索: ${kw}`;
-  const list = await api(`/api/search?keyword=${encodeURIComponent(kw)}&date=${currentDate}`);
-  if (!list.length) { $('#content').innerHTML='<div class="empty">未找到匹配接口</div>'; return; }
-  let rows = list.map(r => {
-    let badge = r.success_rate<90?'err':r.success_rate<99?'warn':'ok';
-    return `<tr><td>${r.project}</td><td>${r.class}</td>
-      <td><a href="#" onclick="event.preventDefault();selectMethod('${r.project}','${r.class}','${r.method}')">${r.method}</a></td>
-      <td>${r.uri}</td><td>${r.count}</td><td><span class="badge ${badge}">${r.success_rate}%</span></td><td>${r.avg_time}ms</td></tr>`;
-  }).join('');
-  $('#content').innerHTML = `<div class="panel"><h3>搜索结果</h3>
-    <table><thead><tr><th>项目</th><th>类</th><th>方法</th><th>URI</th><th>次数</th><th>成功率</th><th>平均耗时</th></tr></thead>
-    <tbody>${rows}</tbody></table></div>`;
-}
-
-$('#dateInput').addEventListener('change', () => {
-  currentDate = $('#dateInput').value;
-  if (currentMethod) loadDetail(currentProject, currentClass, currentMethod);
-  else loadDashboard();
-});
-$('#searchInput').addEventListener('keydown', e => { if(e.key==='Enter') doSearch(); });
-
-// 自动刷新
-setInterval(() => {
-  loadTree();
-  if (!currentMethod) loadDashboard();
-}, 10000);
-
-// 初始加载
-loadTree();
-loadDashboard();
-</script>
-</body>
-</html>
-HTML;
     }
 }
