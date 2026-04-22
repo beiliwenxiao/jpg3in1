@@ -15,10 +15,57 @@ use Webman\Http\Response;
 class MonitorController
 {
     private MonitorStorage $storage;
+    private string $password;
+    private string $tokenKey = 'monitor_token';
 
     public function __construct()
     {
         $this->storage = MonitorStorage::getInstance();
+        $configFile = config_path('monitor.php');
+        $config = is_file($configFile) ? require $configFile : [];
+        $this->password = $config['password'] ?? '';
+    }
+
+    /** 检查是否已登录 */
+    private function checkAuth(Request $request): ?Response
+    {
+        if ($this->password === '') return null; // 无密码，不需要验证
+        $token = $request->cookie($this->tokenKey, '');
+        if ($token === md5($this->password . '_monitor_salt')) return null; // 已登录
+        return null; // API 层面不拦截，由前端处理
+    }
+
+    /** 登录验证接口 */
+    public function login(Request $request): Response
+    {
+        $pwd = $request->post('password', $request->get('password', ''));
+        if ($this->password === '') {
+            return $this->json(['ok' => true, 'msg' => '无需密码']);
+        }
+        if ($pwd === $this->password) {
+            $token = md5($this->password . '_monitor_salt');
+            $response = new Response(200,
+                ['Content-Type' => 'application/json; charset=utf-8'],
+                json_encode(['code' => 0, 'data' => ['ok' => true]], JSON_UNESCAPED_UNICODE)
+            );
+            $response->cookie($this->tokenKey, $token, 86400 * 30, '/');
+            return $response;
+        }
+        return new Response(200,
+            ['Content-Type' => 'application/json; charset=utf-8'],
+            json_encode(['code' => 1, 'data' => ['ok' => false, 'msg' => '密码错误']], JSON_UNESCAPED_UNICODE)
+        );
+    }
+
+    /** 检查登录状态 */
+    public function checkLogin(Request $request): Response
+    {
+        if ($this->password === '') {
+            return $this->json(['need_login' => false]);
+        }
+        $token = $request->cookie($this->tokenKey, '');
+        $loggedIn = ($token === md5($this->password . '_monitor_salt'));
+        return $this->json(['need_login' => !$loggedIn]);
     }
 
     /** 仪表盘概览 */

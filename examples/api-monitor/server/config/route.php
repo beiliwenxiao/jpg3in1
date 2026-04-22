@@ -12,6 +12,8 @@ Route::get('/api/trend',        'app\controller\MonitorController@trend');
 Route::get('/api/search',       'app\controller\MonitorController@search');
 Route::get('/api/dates',        'app\controller\MonitorController@dates');
 Route::get('/api/records',      'app\controller\MonitorController@records');
+Route::any('/api/login',        'app\controller\MonitorController@login');
+Route::get('/api/check-login',  'app\controller\MonitorController@checkLogin');
 
 // 仪表盘页面
 Route::get('/',                 'app\controller\MonitorController@index');

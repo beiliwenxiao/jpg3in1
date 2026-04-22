@@ -85,10 +85,41 @@ tr:hover td{background:#e6f7ff}
 .api-link:hover{text-decoration:underline}
 .stat-row:hover td{background:#e6f7ff}
 .record-detail-row td{padding:0!important}
+.pie-wrap{display:flex;align-items:flex-start;gap:16px}
+.pie-wrap canvas{flex-shrink:0}
+.pie-legend{font-size:12px;line-height:2;max-height:280px;overflow-y:auto;flex:1}
+.pie-legend-item{display:flex;align-items:center;gap:6px;cursor:default}
+.pie-legend-item .dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+.pie-legend-item .name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#595959}
+.pie-legend-item .val{color:#8c8c8c;white-space:nowrap}
+.home-btn{padding:6px 16px;background:#52c41a;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:14px;white-space:nowrap}
+.home-btn:hover{background:#73d13d}
+.logout-btn{padding:6px 12px;background:#fff;color:#ff4d4f;border:1px solid #ff4d4f;border-radius:4px;cursor:pointer;font-size:13px;white-space:nowrap}
+.logout-btn:hover{background:#fff1f0}
+.pie-tooltip{position:absolute;background:rgba(0,0,0,.8);color:#fff;padding:6px 10px;border-radius:4px;font-size:12px;pointer-events:none;white-space:nowrap;z-index:100;display:none}
+.pie-wrap{position:relative}
+.login-mask{position:fixed;top:0;left:0;width:100%;height:100%;background:#f0f2f5;display:flex;align-items:center;justify-content:center;z-index:1000}
+.login-box{background:#fff;border-radius:12px;padding:40px;box-shadow:0 4px 20px rgba(0,0,0,.1);text-align:center;width:340px}
+.login-box h2{margin-bottom:8px;color:#001529}
+.login-box p{color:#8c8c8c;margin-bottom:20px;font-size:14px}
+.login-box input{width:100%;padding:10px 14px;border:1px solid #d9d9d9;border-radius:6px;font-size:15px;margin-bottom:12px;text-align:center}
+.login-box input:focus{outline:none;border-color:#1890ff;box-shadow:0 0 0 2px rgba(24,144,255,.2)}
+.login-box button{width:100%;padding:10px;background:#1890ff;color:#fff;border:none;border-radius:6px;font-size:15px;cursor:pointer}
+.login-box button:hover{background:#40a9ff}
+.login-err{color:#ff4d4f;font-size:13px;margin-bottom:8px;min-height:20px}
 </style>
 </head>
 <body>
-<div class="layout">
+<div class="login-mask" id="loginMask" style="display:none">
+  <div class="login-box">
+    <h2>🔒 API 监控</h2>
+    <p>请输入访问密码</p>
+    <input type="password" id="loginPwd" placeholder="密码" autofocus>
+    <div class="login-err" id="loginErr"></div>
+    <button onclick="doLogin()">登录</button>
+  </div>
+</div>
+<div class="layout" id="mainLayout" style="display:none">
   <div class="sidebar" id="sidebar">
     <h2>📊 API 监控</h2>
     <div id="treeContainer"><div class="empty" style="color:#bfbfbf">加载中...</div></div>
@@ -97,6 +128,8 @@ tr:hover td{background:#e6f7ff}
     <div class="topbar">
       <h1 id="pageTitle">仪表盘概览</h1>
       <div class="search-box">
+        <button onclick="goHome()" class="home-btn" id="homeBtn">🏠 首页</button>
+        <button onclick="doLogout()" class="logout-btn">退出</button>
         <input type="text" id="searchInput" placeholder="搜索接口...">
         <div class="date-nav">
           <button onclick="changeDate(-1)" class="date-btn" title="前一天">◀</button>
@@ -104,7 +137,6 @@ tr:hover td{background:#e6f7ff}
           <button onclick="changeDate(1)" class="date-btn" title="后一天">▶</button>
         </div>
         <button onclick="doSearch()">搜索</button>
-        <button onclick="loadDashboard()" style="background:#52c41a">概览</button>
       </div>
     </div>
     <div id="content"><div class="empty">加载中...</div></div>
@@ -157,6 +189,22 @@ function changeDate(offset) {
 function onDateChange() {
   if (currentMethod) loadDetail(currentProject, currentClass, currentMethod);
   else loadDashboard();
+}
+
+function goHome() {
+  currentProject=''; currentClass=''; currentMethod='';
+  $all('.method-item').forEach(e => e.classList.remove('active'));
+  $one('#pageTitle').textContent = '仪表盘概览';
+  loadDashboard();
+}
+
+function doLogout() {
+  document.cookie = 'monitor_token=; path=/; max-age=0';
+  $one('#mainLayout').style.display = 'none';
+  $one('#loginMask').style.display = 'flex';
+  $one('#loginPwd').value = '';
+  $one('#loginErr').textContent = '';
+  $one('#loginPwd').focus();
 }
 
 // 加载树形菜单
@@ -243,12 +291,19 @@ async function loadDashboard() {
     '<div class="chart-inner" style="width:'+totalWidth+'px">'+trendBars+'</div>' +
     '<div class="chart-time-axis" style="width:'+totalWidth+'px;height:16px">'+ticks+'</div>' +
     '</div></div></div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">' +
+    '<div class="panel"><h3>🐢 慢速接口分布</h3><div class="pie-wrap"><canvas id="pieSlowCanvas" width="280" height="280"></canvas><div id="pieSlowLegend" class="pie-legend"></div></div></div>' +
+    '<div class="panel"><h3>🔥 访问量分布</h3><div class="pie-wrap"><canvas id="pieCountCanvas" width="280" height="280"></canvas><div id="pieCountLegend" class="pie-legend"></div></div></div>' +
+    '</div>' +
     '<div class="panel">' +
     '<div class="tab-bar"><div class="tab active" onclick="switchRankTab(\'slow\')">🐢 慢速 TOP50</div><div class="tab" onclick="switchRankTab(\'count\')">🔥 访问量 TOP50</div></div>' +
     '<div id="rankContent"></div>' +
     '</div>';
   $one('#content').innerHTML = html;
   initTrendScroll(trend);
+  // 渲染饼图
+  renderPieChart('pieSlowCanvas', 'pieSlowLegend', slow, 'avg_time', 'ms');
+  renderPieChart('pieCountCanvas', 'pieCountLegend', top, 'count', '次');
   // 存储排行数据并渲染
   window._rankSlow = slow;
   window._rankCount = top;
@@ -306,6 +361,160 @@ function updateTrendLabel() {
   const endH = String(Math.floor(endMin / 60)).padStart(2, '0');
   const endM = String(endMin % 60).padStart(2, '0');
   label.textContent = startH + ':' + startM + ' — ' + endH + ':' + endM;
+}
+
+// 饼图颜色
+const PIE_COLORS = [
+  '#1890ff','#52c41a','#fa8c16','#ff4d4f','#722ed1','#13c2c2','#eb2f96',
+  '#faad14','#2f54eb','#a0d911','#f5222d','#1da57a','#9254de','#36cfc9',
+  '#ff7a45','#597ef7','#ffc53d','#ff85c0','#73d13d','#40a9ff'
+];
+
+function renderPieChart(canvasId, legendId, data, valueField, unit) {
+  const canvas = document.getElementById(canvasId);
+  const legend = document.getElementById(legendId);
+  if (!canvas || !legend) return;
+
+  const ctx = canvas.getContext('2d');
+  const cx = 140, cy = 140, r = 110, innerR = r * 0.55, hoverGrow = 8;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  let items = data.slice(0, 20).map(d => ({
+    name: d.class + '.' + d.method,
+    value: d[valueField] || 0,
+    project: d.project || '', cls: d.class || '', method: d.method || '',
+    count: d.count || 0, avg_time: d.avg_time || 0, uri: d.uri || ''
+  }));
+
+  if (data.length > 20) {
+    let otherVal = 0;
+    for (let i = 20; i < data.length; i++) otherVal += data[i][valueField] || 0;
+    items.push({ name: '其他 (' + (data.length - 20) + '个)', value: otherVal, project: '', cls: '', method: '', count: 0, avg_time: 0, uri: '' });
+  }
+
+  let total = items.reduce((s, d) => s + d.value, 0);
+  if (total === 0) {
+    ctx.fillStyle = '#f0f0f0';
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#bfbfbf'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('暂无数据', cx, cy + 5);
+    return;
+  }
+
+  // 计算扇区角度
+  let slices = [];
+  let startAngle = -Math.PI / 2;
+  items.forEach((item, i) => {
+    let sliceAngle = (item.value / total) * Math.PI * 2;
+    slices.push({ start: startAngle, end: startAngle + sliceAngle, item: item, color: PIE_COLORS[i % PIE_COLORS.length] });
+    startAngle += sliceAngle;
+  });
+
+  // 绘制函数（支持高亮某个扇区）
+  function drawPie(hoverIdx) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    slices.forEach((s, i) => {
+      let curR = (i === hoverIdx) ? r + hoverGrow : r;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, curR, s.start, s.end);
+      ctx.closePath();
+      ctx.fillStyle = s.color;
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    });
+    // 中心白圆
+    ctx.beginPath(); ctx.arc(cx, cy, innerR, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
+    // 中心文字
+    let displayTotal = unit === 'ms' ? parseFloat(total).toFixed(2) + 'ms' : total;
+    ctx.fillStyle = '#333'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(displayTotal, cx, cy - 2);
+    ctx.fillStyle = '#8c8c8c'; ctx.font = '12px sans-serif';
+    ctx.fillText(unit === 'ms' ? '总平均耗时' : '总访问量', cx, cy + 16);
+  }
+
+  drawPie(-1);
+
+  // 获取或创建 tooltip
+  let wrap = canvas.parentElement;
+  let tip = wrap.querySelector('.pie-tooltip');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.className = 'pie-tooltip';
+    wrap.appendChild(tip);
+  }
+
+  // 检测鼠标在哪个扇区
+  function hitTest(e) {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left - cx;
+    const y = e.clientY - rect.top - cy;
+    const dist = Math.sqrt(x * x + y * y);
+    if (dist < innerR || dist > r + hoverGrow) return -1;
+    let angle = Math.atan2(y, x);
+    for (let i = 0; i < slices.length; i++) {
+      let a = angle;
+      while (a < slices[i].start) a += Math.PI * 2;
+      if (a >= slices[i].start && a < slices[i].end) return i;
+    }
+    return -1;
+  }
+
+  let lastHover = -1;
+  canvas.onmousemove = function(e) {
+    let idx = hitTest(e);
+    if (idx !== lastHover) {
+      lastHover = idx;
+      drawPie(idx);
+      canvas.style.cursor = (idx >= 0 && slices[idx].item.project) ? 'pointer' : (idx >= 0 ? 'default' : 'default');
+    }
+    if (idx >= 0) {
+      let s = slices[idx].item;
+      let pct = (s.value / total * 100).toFixed(1);
+      let valStr = unit === 'ms' ? s.value.toFixed(2) + 'ms' : s.value + '次';
+      tip.innerHTML = '<div style="font-weight:600;margin-bottom:2px">' + s.name + '</div>' +
+        valStr + ' (' + pct + '%)' +
+        (s.uri ? '<br>URI: ' + s.uri : '') +
+        (s.count && unit === 'ms' ? '<br>次数: ' + s.count : '') +
+        (s.avg_time && unit !== 'ms' ? '<br>平均耗时: ' + s.avg_time.toFixed(2) + 'ms' : '');
+      const rect = canvas.getBoundingClientRect();
+      const wrapRect = wrap.getBoundingClientRect();
+      tip.style.display = 'block';
+      tip.style.left = (e.clientX - wrapRect.left + 12) + 'px';
+      tip.style.top = (e.clientY - wrapRect.top - 10) + 'px';
+    } else {
+      tip.style.display = 'none';
+    }
+  };
+
+  canvas.onmouseleave = function() {
+    lastHover = -1;
+    drawPie(-1);
+    tip.style.display = 'none';
+  };
+
+  canvas.onclick = function(e) {
+    let idx = hitTest(e);
+    if (idx >= 0 && slices[idx].item.project) {
+      let s = slices[idx].item;
+      selectMethod(s.project, s.cls, s.method);
+    }
+  };
+
+  // 图例
+  let legendHtml = items.map((item, i) => {
+    let pct = (item.value / total * 100).toFixed(1);
+    let color = PIE_COLORS[i % PIE_COLORS.length];
+    let clickAttr = item.project ? ' onclick="selectMethod(\''+item.project+'\',\''+item.cls+'\',\''+item.method+'\')" style="cursor:pointer"' : '';
+    return '<div class="pie-legend-item" title="' + item.name + ': ' + (unit==='ms'?item.value.toFixed(2):item.value) + unit + ' (' + pct + '%)"' + clickAttr + '>' +
+      '<span class="dot" style="background:' + color + '"></span>' +
+      '<span class="name">' + item.name + '</span>' +
+      '<span class="val">' + pct + '%</span></div>';
+  }).join('');
+  legend.innerHTML = legendHtml;
 }
 
 function switchRankTab(type) {
@@ -490,19 +699,90 @@ async function doSearch() {
     '<tbody>'+rows+'</tbody></table></div>';
 }
 
+// 登录逻辑
+async function checkAuth() {
+  try {
+    const r = await api('/api/check-login');
+    if (r.need_login) {
+      $one('#loginMask').style.display = 'flex';
+      $one('#mainLayout').style.display = 'none';
+      $one('#loginPwd').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+    } else {
+      showMain();
+    }
+  } catch(e) {
+    showMain();
+  }
+}
+
+async function doLogin() {
+  const pwd = $one('#loginPwd').value;
+  if (!pwd) { $one('#loginErr').textContent = '请输入密码'; return; }
+  try {
+    const r = await fetch('/api/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: 'password=' + encodeURIComponent(pwd)
+    });
+    const j = await r.json();
+    if (j.code === 0 && j.data.ok) {
+      showMain();
+    } else {
+      $one('#loginErr').textContent = j.data?.msg || '密码错误';
+      $one('#loginPwd').value = '';
+      $one('#loginPwd').focus();
+    }
+  } catch(e) {
+    $one('#loginErr').textContent = '登录失败，请重试';
+  }
+}
+
+function showMain() {
+  $one('#loginMask').style.display = 'none';
+  $one('#mainLayout').style.display = 'flex';
+  initDates().then(() => {
+    loadTree();
+    loadDashboard();
+  });
+}
+
 $one('#searchInput').addEventListener('keydown', e => { if(e.key==='Enter') doSearch(); });
 
-// 自动刷新
-setInterval(() => {
-  loadTree();
-  if (!currentMethod) loadDashboard();
+// 静默更新（不重绘页面，只更新数据）
+setInterval(async () => {
+  try {
+    if (currentMethod) return; // 在详情页不自动更新
+    const d = await api('/api/dashboard?date=' + currentDate);
+    const trend = await api('/api/trend?date=' + currentDate);
+    const slow = await api('/api/ranking/slow?date=' + currentDate + '&limit=50');
+    const top = await api('/api/ranking/count?date=' + currentDate + '&limit=50');
+
+    // 更新卡片数值
+    const cards = $all('.card .value');
+    if (cards.length >= 5) {
+      cards[0].textContent = d.total_count;
+      cards[1].textContent = d.success;
+      cards[2].textContent = d.fail;
+      cards[3].textContent = d.success_rate + '%';
+      cards[4].textContent = d.avg_time + 'ms';
+    }
+
+    // 更新排行数据（不重绘表格，下次切换 tab 时生效）
+    window._rankSlow = slow;
+    window._rankCount = top;
+    renderRank();
+
+    // 更新饼图
+    renderPieChart('pieSlowCanvas', 'pieSlowLegend', slow, 'avg_time', 'ms');
+    renderPieChart('pieCountCanvas', 'pieCountLegend', top, 'count', '次');
+
+    // 静默更新树形菜单
+    loadTree();
+  } catch(e) {}
 }, 10000);
 
 // 初始加载
-initDates().then(() => {
-  loadTree();
-  loadDashboard();
-});
+checkAuth();
 </script>
 </body>
 </html>

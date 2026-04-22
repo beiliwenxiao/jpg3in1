@@ -11,6 +11,9 @@
 return [
     'driver' => 'memory',
 
+    // 访问密码（为空则不需要密码）
+    'password' => '888888',
+
     // 日志持久化配置
     'log' => [
         'enable'   => true,           // 是否启用日志持久化
