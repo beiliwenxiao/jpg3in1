@@ -95,6 +95,13 @@ class MonitorController
         return $this->json($this->storage->getRealtime());
     }
 
+    /** 全天访问趋势（分钟级） */
+    public function trend(Request $request): Response
+    {
+        $date = $request->get('date', date('Y-m-d'));
+        return $this->json($this->storage->getDayTrend($date));
+    }
+
     /** 搜索 */
     public function search(Request $request): Response
     {

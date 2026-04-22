@@ -54,11 +54,23 @@ tr:hover td{background:#e6f7ff}
 .badge.ok{background:#f6ffed;color:#52c41a}
 .badge.warn{background:#fff7e6;color:#fa8c16}
 .badge.err{background:#fff1f0;color:#ff4d4f}
-.chart-bar{display:flex;align-items:end;gap:3px;height:80px;margin-top:8px}
-.chart-bar .bar{flex:1;background:#1890ff;border-radius:2px 2px 0 0;min-width:8px;position:relative;transition:height .3s}
-.chart-bar .bar:hover{background:#40a9ff}
-.chart-bar .bar .tip{display:none;position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:2px 6px;border-radius:3px;font-size:11px;white-space:nowrap}
-.chart-bar .bar:hover .tip{display:block}
+.chart-wrap{position:relative;overflow:hidden}
+.chart-viewport{overflow-x:auto;cursor:grab;-webkit-overflow-scrolling:touch}
+.chart-viewport:active{cursor:grabbing}
+.chart-viewport::-webkit-scrollbar{height:6px}
+.chart-viewport::-webkit-scrollbar-thumb{background:#d9d9d9;border-radius:3px}
+.chart-viewport::-webkit-scrollbar-thumb:hover{background:#bfbfbf}
+.chart-inner{display:flex;align-items:end;height:90px;position:relative}
+.chart-inner .bar{width:8px;min-width:8px;flex-shrink:0;background:#1890ff;position:relative;margin-right:2px}
+.chart-inner .bar:hover{background:#40a9ff}
+.chart-inner .bar .tip{display:none;position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:2px 6px;border-radius:3px;font-size:11px;white-space:nowrap;z-index:10}
+.chart-inner .bar:hover .tip{display:block}
+.chart-time-axis{display:flex;font-size:10px;color:#8c8c8c;margin-top:2px;position:relative}
+.chart-time-axis .tick{position:absolute;top:0;transform:translateX(-50%)}
+.chart-nav{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.chart-nav button{padding:4px 12px;background:#fff;border:1px solid #d9d9d9;border-radius:4px;cursor:pointer;font-size:12px}
+.chart-nav button:hover{background:#e6f7ff;border-color:#1890ff}
+.chart-nav .time-label{font-size:13px;color:#595959;min-width:120px;text-align:center}
 .empty{text-align:center;padding:40px;color:#bfbfbf;font-size:14px}
 </style>
 </head>
@@ -179,15 +191,24 @@ async function loadDashboard() {
   $all('.method-item').forEach(e => e.classList.remove('active'));
   $one('#pageTitle').textContent = '仪表盘概览';
   const d = await api('/api/dashboard?date=' + currentDate);
-  const rt = await api('/api/realtime');
+  const trend = await api('/api/trend?date=' + currentDate);
   const slow = await api('/api/ranking/slow?date=' + currentDate + '&limit=10');
   const top = await api('/api/ranking/count?date=' + currentDate + '&limit=10');
 
-  let maxRt = Math.max(...rt.map(r=>r.count), 1);
-  let rtBars = rt.map(r => {
-    let h = Math.max(r.count/maxRt*70, 2);
+  let maxTr = Math.max(...trend.map(r=>r.count), 1);
+  let barWidth = 10; // 8px bar + 2px gap
+  let totalWidth = trend.length * barWidth;
+  let trendBars = trend.map(r => {
+    let h = r.count > 0 ? Math.max(r.count/maxTr*80, 1) : 0;
     return '<div class="bar" style="height:'+h+'px"><span class="tip">'+r.time.slice(11)+' : '+r.count+'次</span></div>';
   }).join('');
+
+  // 时间刻度（每小时一个）
+  let ticks = '';
+  for (let h = 0; h < 24; h++) {
+    let pos = h * 60 * barWidth;
+    ticks += '<span class="tick" style="left:'+pos+'px">'+(h<10?'0'+h:h)+':00</span>';
+  }
 
   let html = '<div class="cards">' +
     '<div class="card"><div class="label">今日总请求</div><div class="value blue">'+d.total_count+'</div></div>' +
@@ -196,12 +217,76 @@ async function loadDashboard() {
     '<div class="card"><div class="label">成功率</div><div class="value green">'+d.success_rate+'%</div></div>' +
     '<div class="card"><div class="label">平均耗时</div><div class="value orange">'+d.avg_time+'ms</div></div>' +
     '</div>' +
-    '<div class="panel"><h3>📈 实时访问量（最近10分钟）</h3><div class="chart-bar">'+rtBars+'</div></div>' +
+    '<div class="panel"><h3>📈 访问趋势（24小时 · 每分钟）</h3>' +
+    '<div class="chart-nav">' +
+    '<button onclick="scrollTrend(-60)">◀ 1h</button>' +
+    '<button onclick="scrollTrend(-10)">◀ 10m</button>' +
+    '<span class="time-label" id="trendTimeLabel"></span>' +
+    '<button onclick="scrollTrend(10)">10m ▶</button>' +
+    '<button onclick="scrollTrend(60)">1h ▶</button>' +
+    '<button onclick="scrollTrendTo(\'now\')" style="margin-left:8px;background:#e6f7ff">当前</button>' +
+    '</div>' +
+    '<div class="chart-wrap"><div class="chart-viewport" id="trendViewport">' +
+    '<div class="chart-inner" style="width:'+totalWidth+'px">'+trendBars+'</div>' +
+    '<div class="chart-time-axis" style="width:'+totalWidth+'px;height:16px">'+ticks+'</div>' +
+    '</div></div></div>' +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">' +
     '<div class="panel"><h3>🐢 慢速接口 TOP10</h3>'+rankTable(slow,'slow')+'</div>' +
     '<div class="panel"><h3>🔥 访问量 TOP10</h3>'+rankTable(top,'count')+'</div>' +
     '</div>';
   $one('#content').innerHTML = html;
+  initTrendScroll(trend);
+}
+
+// 趋势图滚动控制
+let trendData = [];
+function initTrendScroll(data) {
+  trendData = data;
+  const vp = $one('#trendViewport');
+  if (!vp) return;
+  // 滚动到当前时间附近
+  scrollTrendTo('now');
+  // 拖拽滚动
+  let isDragging = false, startX = 0, scrollStart = 0;
+  vp.addEventListener('mousedown', e => { isDragging = true; startX = e.clientX; scrollStart = vp.scrollLeft; vp.style.cursor = 'grabbing'; });
+  document.addEventListener('mousemove', e => { if (!isDragging) return; vp.scrollLeft = scrollStart - (e.clientX - startX); });
+  document.addEventListener('mouseup', () => { if (isDragging) { isDragging = false; vp.style.cursor = 'grab'; updateTrendLabel(); } });
+  vp.addEventListener('scroll', () => updateTrendLabel());
+  updateTrendLabel();
+}
+
+function scrollTrend(minutes) {
+  const vp = $one('#trendViewport');
+  if (!vp) return;
+  vp.scrollLeft += minutes * 10;
+  updateTrendLabel();
+}
+
+function scrollTrendTo(target) {
+  const vp = $one('#trendViewport');
+  if (!vp) return;
+  if (target === 'now') {
+    const now = new Date();
+    const minuteOfDay = now.getHours() * 60 + now.getMinutes();
+    const centerOffset = minuteOfDay * 10 - vp.clientWidth / 2;
+    vp.scrollLeft = Math.max(0, centerOffset);
+  }
+  updateTrendLabel();
+}
+
+function updateTrendLabel() {
+  const vp = $one('#trendViewport');
+  const label = $one('#trendTimeLabel');
+  if (!vp || !label) return;
+  const barWidth = 10;
+  const startMin = Math.floor(vp.scrollLeft / barWidth);
+  const visibleBars = Math.floor(vp.clientWidth / barWidth);
+  const endMin = Math.min(startMin + visibleBars, 1439);
+  const startH = String(Math.floor(startMin / 60)).padStart(2, '0');
+  const startM = String(startMin % 60).padStart(2, '0');
+  const endH = String(Math.floor(endMin / 60)).padStart(2, '0');
+  const endM = String(endMin % 60).padStart(2, '0');
+  label.textContent = startH + ':' + startM + ' — ' + endH + ':' + endM;
 }
 
 function rankTable(list, type) {

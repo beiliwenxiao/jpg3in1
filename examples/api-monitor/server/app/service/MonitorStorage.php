@@ -102,6 +102,7 @@ class MonitorStorage implements StorageInterface
     public function getCountRanking(string $date = '', int $limit = 20): array { return $this->backend->getCountRanking($date, $limit); }
     public function getRealtime(): array { return $this->backend->getRealtime(); }
     public function search(string $keyword, string $date = ''): array { return $this->backend->search($keyword, $date); }
+    public function getDayTrend(string $date = ''): array { return $this->backend->getDayTrend($date); }
     public function hasData(string $date): bool { return $this->backend->hasData($date); }
 
     // ========== 日志文件回退读取（与驱动无关） ==========

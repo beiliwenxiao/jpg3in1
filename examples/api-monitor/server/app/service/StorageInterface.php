@@ -33,6 +33,9 @@ interface StorageInterface
     /** 搜索接口 */
     public function search(string $keyword, string $date = ''): array;
 
+    /** 全天分钟级访问趋势（1440个点） */
+    public function getDayTrend(string $date = ''): array;
+
     /** 判断指定日期是否有数据 */
     public function hasData(string $date): bool;
 }

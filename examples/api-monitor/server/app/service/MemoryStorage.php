@@ -212,4 +212,25 @@ class MemoryStorage implements StorageInterface
         }
         return false;
     }
+
+    public function getDayTrend(string $date = ''): array
+    {
+        if (!$date) $date = date('Y-m-d');
+        $result = [];
+        for ($h = 0; $h < 24; $h++) {
+            for ($m = 0; $m < 60; $m++) {
+                $minute = sprintf('%s %02d:%02d', $date, $h, $m);
+                $count = 0; $success = 0; $fail = 0;
+                foreach ($this->minuteStats as $periods) {
+                    if (isset($periods[$minute])) {
+                        $count += $periods[$minute]['count'];
+                        $success += $periods[$minute]['success'];
+                        $fail += $periods[$minute]['fail'];
+                    }
+                }
+                $result[] = ['time' => $minute, 'count' => $count, 'success' => $success, 'fail' => $fail];
+            }
+        }
+        return $result;
+    }
 }

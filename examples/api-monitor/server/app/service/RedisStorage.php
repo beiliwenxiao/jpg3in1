@@ -272,4 +272,42 @@ LUA;
     {
         return !empty($this->getDayKeys($date));
     }
+
+    public function getDayTrend(string $date = ''): array
+    {
+        if (!$date) $date = date('Y-m-d');
+        $tree = $this->getTree();
+        $allKeys = [];
+        foreach ($tree as $p => $classes) {
+            foreach ($classes as $c => $methods) {
+                foreach ($methods as $m => $uri) {
+                    $allKeys[] = "{$p}|{$c}|{$m}|{$uri}";
+                }
+            }
+        }
+
+        // 批量获取所有分钟数据
+        $minuteData = [];
+        foreach ($allKeys as $key) {
+            $periods = $this->getPeriodsForDate('minute', $key, $date);
+            foreach ($periods as $period => $stats) {
+                if (!isset($minuteData[$period])) {
+                    $minuteData[$period] = ['count' => 0, 'success' => 0, 'fail' => 0];
+                }
+                $minuteData[$period]['count'] += $stats['count'];
+                $minuteData[$period]['success'] += $stats['success'];
+                $minuteData[$period]['fail'] += $stats['fail'];
+            }
+        }
+
+        $result = [];
+        for ($h = 0; $h < 24; $h++) {
+            for ($m = 0; $m < 60; $m++) {
+                $minute = sprintf('%s %02d:%02d', $date, $h, $m);
+                $d = $minuteData[$minute] ?? ['count' => 0, 'success' => 0, 'fail' => 0];
+                $result[] = ['time' => $minute, 'count' => $d['count'], 'success' => $d['success'], 'fail' => $d['fail']];
+            }
+        }
+        return $result;
+    }
 }

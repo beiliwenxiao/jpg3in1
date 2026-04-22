@@ -8,6 +8,7 @@ Route::get('/api/detail',       'app\controller\MonitorController@detail');
 Route::get('/api/ranking/slow', 'app\controller\MonitorController@rankingSlow');
 Route::get('/api/ranking/count','app\controller\MonitorController@rankingCount');
 Route::get('/api/realtime',     'app\controller\MonitorController@realtime');
+Route::get('/api/trend',        'app\controller\MonitorController@trend');
 Route::get('/api/search',       'app\controller\MonitorController@search');
 Route::get('/api/dates',        'app\controller\MonitorController@dates');
 
