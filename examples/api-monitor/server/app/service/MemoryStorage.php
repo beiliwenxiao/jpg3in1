@@ -23,6 +23,12 @@ class MemoryStorage implements StorageInterface
     /** @var array 项目→类→方法 树形结构 */
     private array $tree = [];
 
+    /** @var array 访问明细 [key => [minute => [records...]]] */
+    private array $records = [];
+
+    /** @var int 每个 key+minute 最多保留的明细条数 */
+    private int $maxRecordsPerMinute = 200;
+
     public function record(array $data): void
     {
         $project  = $data['project']  ?? 'default';
@@ -33,6 +39,7 @@ class MemoryStorage implements StorageInterface
         $status   = (int)($data['status'] ?? 200);
         $success  = $status >= 200 && $status < 400;
         $time     = (int)($data['timestamp'] ?? time());
+        $params   = $data['params']   ?? [];
 
         $key = "{$project}|{$class}|{$method}|{$uri}";
 
@@ -47,6 +54,30 @@ class MemoryStorage implements StorageInterface
         $this->aggregate($this->minuteStats, $key, $minute, $duration, $success);
         $this->aggregate($this->hourStats, $key, $hour, $duration, $success);
         $this->aggregate($this->dayStats, $key, $day, $duration, $success);
+
+        // 保存明细
+        if (!isset($this->records[$key][$minute])) {
+            $this->records[$key][$minute] = [];
+        }
+        if (count($this->records[$key][$minute]) < $this->maxRecordsPerMinute) {
+            $this->records[$key][$minute][] = [
+                'time'     => date('Y-m-d H:i:s', $time),
+                'duration' => $duration,
+                'status'   => $status,
+                'params'   => $params,
+                'response' => $data['response'] ?? [],
+            ];
+        }
+
+        // 清理超过 2 小时的明细
+        $cutoff = date('Y-m-d H:i', $time - 7200);
+        foreach ($this->records as $k => &$minutes) {
+            foreach (array_keys($minutes) as $m) {
+                if ($m < $cutoff) unset($minutes[$m]);
+            }
+            if (empty($minutes)) unset($this->records[$k]);
+        }
+        unset($minutes);
     }
 
     private function aggregate(array &$store, string $key, string $period, float $duration, bool $success): void
@@ -232,5 +263,15 @@ class MemoryStorage implements StorageInterface
             }
         }
         return $result;
+    }
+
+    public function getRecords(string $project, string $class, string $method, string $minute, int $limit = 100): array
+    {
+        $tree = $this->tree[$project][$class][$method] ?? null;
+        if ($tree === null) return [];
+        $uri = $tree;
+        $key = "{$project}|{$class}|{$method}|{$uri}";
+        $records = $this->records[$key][$minute] ?? [];
+        return array_slice($records, 0, $limit);
     }
 }

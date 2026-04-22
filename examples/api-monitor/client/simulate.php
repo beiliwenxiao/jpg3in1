@@ -68,7 +68,10 @@ while (true) {
         $duration = $timeRange[0] + mt_rand(0, ($timeRange[1] - $timeRange[0]) * 100) / 100;
         $status   = randomStatus($statusWeights);
 
-        $client->report($class, $method, $uri, $status, $duration);
+        // 模拟请求参数
+        $params = ['page' => mt_rand(1, 10), 'id' => mt_rand(1, 1000)];
+        $response = ['code' => $status < 400 ? 0 : 1, 'msg' => $status < 400 ? 'ok' : 'error'];
+        $client->report($class, $method, $uri, $status, $duration, $params, $response);
         $count++;
 
         $statusLabel = $status < 400 ? "\033[32m{$status}\033[0m" : "\033[31m{$status}\033[0m";

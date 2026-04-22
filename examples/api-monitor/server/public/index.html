@@ -72,6 +72,19 @@ tr:hover td{background:#e6f7ff}
 .chart-nav button:hover{background:#e6f7ff;border-color:#1890ff}
 .chart-nav .time-label{font-size:13px;color:#595959;min-width:120px;text-align:center}
 .empty{text-align:center;padding:40px;color:#bfbfbf;font-size:14px}
+.tab-bar{display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid #f0f0f0}
+.tab-bar .tab{padding:10px 24px;cursor:pointer;font-size:14px;color:#8c8c8c;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s;user-select:none}
+.tab-bar .tab.active{color:#1890ff;border-bottom-color:#1890ff;font-weight:600}
+.tab-bar .tab:hover{color:#1890ff}
+.pager{display:flex;align-items:center;gap:6px;margin-top:12px;flex-wrap:wrap}
+.pager .page-info{font-size:12px;color:#8c8c8c;margin-right:8px}
+.pager .page-btn{padding:4px 10px;background:#fff;border:1px solid #d9d9d9;border-radius:4px;cursor:pointer;font-size:12px}
+.pager .page-btn:hover{border-color:#1890ff;color:#1890ff}
+.pager .page-btn.active{background:#1890ff;color:#fff;border-color:#1890ff}
+.api-link{color:#1890ff;text-decoration:none;cursor:pointer}
+.api-link:hover{text-decoration:underline}
+.stat-row:hover td{background:#e6f7ff}
+.record-detail-row td{padding:0!important}
 </style>
 </head>
 <body>
@@ -192,8 +205,8 @@ async function loadDashboard() {
   $one('#pageTitle').textContent = '仪表盘概览';
   const d = await api('/api/dashboard?date=' + currentDate);
   const trend = await api('/api/trend?date=' + currentDate);
-  const slow = await api('/api/ranking/slow?date=' + currentDate + '&limit=10');
-  const top = await api('/api/ranking/count?date=' + currentDate + '&limit=10');
+  const slow = await api('/api/ranking/slow?date=' + currentDate + '&limit=50');
+  const top = await api('/api/ranking/count?date=' + currentDate + '&limit=50');
 
   let maxTr = Math.max(...trend.map(r=>r.count), 1);
   let barWidth = 10; // 8px bar + 2px gap
@@ -230,12 +243,18 @@ async function loadDashboard() {
     '<div class="chart-inner" style="width:'+totalWidth+'px">'+trendBars+'</div>' +
     '<div class="chart-time-axis" style="width:'+totalWidth+'px;height:16px">'+ticks+'</div>' +
     '</div></div></div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">' +
-    '<div class="panel"><h3>🐢 慢速接口 TOP10</h3>'+rankTable(slow,'slow')+'</div>' +
-    '<div class="panel"><h3>🔥 访问量 TOP10</h3>'+rankTable(top,'count')+'</div>' +
+    '<div class="panel">' +
+    '<div class="tab-bar"><div class="tab active" onclick="switchRankTab(\'slow\')">🐢 慢速 TOP50</div><div class="tab" onclick="switchRankTab(\'count\')">🔥 访问量 TOP50</div></div>' +
+    '<div id="rankContent"></div>' +
     '</div>';
   $one('#content').innerHTML = html;
   initTrendScroll(trend);
+  // 存储排行数据并渲染
+  window._rankSlow = slow;
+  window._rankCount = top;
+  window._rankType = 'slow';
+  window._rankPage = 1;
+  renderRank();
 }
 
 // 趋势图滚动控制
@@ -289,21 +308,47 @@ function updateTrendLabel() {
   label.textContent = startH + ':' + startM + ' — ' + endH + ':' + endM;
 }
 
-function rankTable(list, type) {
-  if (!list.length) return '<div class="empty">暂无数据</div>';
-  let rows = list.map((r,i) => {
-    let badge = type==='slow'
-      ? (r.avg_time>1000?'err':r.avg_time>500?'warn':'ok')
-      : (r.success_rate<90?'err':r.success_rate<99?'warn':'ok');
-    let val = type==='slow' ? r.avg_time+'ms' : r.count;
-    let extra = type==='slow' ? '<td>'+r.max_time+'ms</td><td>'+r.count+'</td>'
-      : '<td>'+r.success+'</td><td>'+r.fail+'</td><td><span class="badge '+badge+'">'+r.success_rate+'%</span></td>';
-    return '<tr><td>'+(i+1)+'</td><td title="'+r.uri+'">'+r.class+'.'+r.method+'</td><td><span class="badge '+badge+'">'+val+'</span></td>'+extra+'</tr>';
+function switchRankTab(type) {
+  window._rankType = type;
+  window._rankPage = 1;
+  $all('.tab-bar .tab').forEach(t => t.classList.remove('active'));
+  const tabs = $all('.tab-bar .tab');
+  if (type === 'slow') tabs[0].classList.add('active');
+  else tabs[1].classList.add('active');
+  renderRank();
+}
+
+function renderRank() {
+  const type = window._rankType || 'slow';
+  const list = type === 'slow' ? (window._rankSlow || []) : (window._rankCount || []);
+
+  let content = $one('#rankContent');
+  if (!content) return;
+
+  if (!list.length) {
+    content.innerHTML = '<div class="empty">暂无数据</div>';
+    return;
+  }
+
+  let rows = list.map((r, i) => {
+    let badge, val, extra;
+    if (type === 'slow') {
+      badge = r.avg_time>1000?'err':r.avg_time>500?'warn':'ok';
+      val = r.avg_time+'ms';
+      extra = '<td>'+r.max_time+'ms</td><td>'+r.count+'</td>';
+    } else {
+      badge = r.success_rate<90?'err':r.success_rate<99?'warn':'ok';
+      val = r.count;
+      extra = '<td>'+r.success+'</td><td>'+r.fail+'</td><td><span class="badge '+badge+'">'+r.success_rate+'%</span></td>';
+    }
+    return '<tr><td>'+(i+1)+'</td><td title="'+r.uri+'"><a href="#" class="api-link" onclick="event.preventDefault();selectMethod(\''+r.project+'\',\''+r.class+'\',\''+r.method+'\')">'+r.class+'.'+r.method+'</a></td><td><span class="badge '+badge+'">'+val+'</span></td>'+extra+'</tr>';
   }).join('');
-  let th = type==='slow'
+
+  let th = type === 'slow'
     ? '<th>#</th><th>接口</th><th>平均耗时</th><th>最大耗时</th><th>次数</th>'
     : '<th>#</th><th>接口</th><th>次数</th><th>成功</th><th>失败</th><th>成功率</th>';
-  return '<table><thead><tr>'+th+'</tr></thead><tbody>'+rows+'</tbody></table>';
+
+  content.innerHTML = '<table><thead><tr>'+th+'</tr></thead><tbody>'+rows+'</tbody></table>';
 }
 
 // 接口详情
@@ -324,16 +369,38 @@ async function loadDetail(proj, cls, mtd) {
   let avgTime = totalCount>0 ? (totalTime/totalCount).toFixed(2) : 0;
   let successRate = totalCount>0 ? (totalSuccess/totalCount*100).toFixed(2) : 0;
 
-  let maxC = Math.max(...keys.map(k=>periods[k].count),1);
-  let bars = keys.map(k => {
-    let s=periods[k], h=Math.max(s.count/maxC*70,2);
-    return '<div class="bar" style="height:'+h+'px"><span class="tip">'+k.slice(11)+' '+s.count+'次 '+s.avg_time+'ms</span></div>';
+  // 构建全天 1440 个点的数据
+  let allMinutes = [];
+  let maxC = 1;
+  for (let h = 0; h < 24; h++) {
+    for (let m = 0; m < 60; m++) {
+      let minute = currentDate + ' ' + String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+      let s = periods[minute] || null;
+      let count = s ? s.count : 0;
+      let avgT = s ? s.avg_time : 0;
+      if (count > maxC) maxC = count;
+      allMinutes.push({time: minute, count: count, avg_time: avgT});
+    }
+  }
+
+  let barWidth = 10;
+  let totalWidth = 1440 * barWidth;
+  let detailBars = allMinutes.map(r => {
+    let h = r.count > 0 ? Math.max(r.count/maxC*80, 1) : 0;
+    return '<div class="bar" style="height:'+h+'px"><span class="tip">'+r.time.slice(11)+' '+r.count+'次 '+r.avg_time+'ms</span></div>';
   }).join('');
+
+  let ticks = '';
+  for (let h = 0; h < 24; h++) {
+    let pos = h * 60 * barWidth;
+    ticks += '<span class="tick" style="left:'+pos+'px">'+(h<10?'0'+h:h)+':00</span>';
+  }
 
   let rows = keys.map(k => {
     let s=periods[k];
     let badge = s.success_rate<90?'err':s.success_rate<99?'warn':'ok';
-    return '<tr><td>'+k+'</td><td>'+s.count+'</td><td>'+s.success+'</td><td>'+s.fail+'</td>' +
+    return '<tr class="stat-row" onclick="toggleRecords(this,\''+proj+'\',\''+cls+'\',\''+mtd+'\',\''+k+'\')" style="cursor:pointer">' +
+      '<td>'+k+' <span style="font-size:11px;color:#1890ff">▶</span></td><td>'+s.count+'</td><td>'+s.success+'</td><td>'+s.fail+'</td>' +
       '<td><span class="badge '+badge+'">'+s.success_rate+'%</span></td>' +
       '<td>'+s.avg_time+'ms</td><td>'+s.max_time.toFixed(2)+'ms</td><td>'+s.min_time.toFixed(2)+'ms</td></tr>';
   }).join('');
@@ -346,11 +413,62 @@ async function loadDetail(proj, cls, mtd) {
     '<div class="card"><div class="label">平均耗时</div><div class="value orange">'+avgTime+'ms</div></div>' +
     '<div class="card"><div class="label">最大耗时</div><div class="value red">'+maxTime.toFixed(2)+'ms</div></div>' +
     '</div>' +
-    '<div class="panel"><h3>📈 访问趋势</h3><div class="chart-bar">'+bars+'</div></div>' +
-    '<div class="panel"><h3>📋 分时统计</h3>' +
-    '<table><thead><tr><th>时间</th><th>次数</th><th>成功</th><th>失败</th><th>成功率</th><th>平均耗时</th><th>最大</th><th>最小</th></tr></thead>' +
+    '<div class="panel"><h3>📈 访问趋势（24小时 · 每分钟）</h3>' +
+    '<div class="chart-nav">' +
+    '<button onclick="scrollTrend(-60)">◀ 1h</button>' +
+    '<button onclick="scrollTrend(-10)">◀ 10m</button>' +
+    '<span class="time-label" id="trendTimeLabel"></span>' +
+    '<button onclick="scrollTrend(10)">10m ▶</button>' +
+    '<button onclick="scrollTrend(60)">1h ▶</button>' +
+    '<button onclick="scrollTrendTo(\'now\')" style="margin-left:8px;background:#e6f7ff">当前</button>' +
+    '</div>' +
+    '<div class="chart-wrap"><div class="chart-viewport" id="trendViewport">' +
+    '<div class="chart-inner" style="width:'+totalWidth+'px">'+detailBars+'</div>' +
+    '<div class="chart-time-axis" style="width:'+totalWidth+'px;height:16px">'+ticks+'</div>' +
+    '</div></div></div>' +
+    '<div class="panel"><h3>📋 分时统计 <span style="font-size:12px;color:#8c8c8c;font-weight:normal">（点击行查看明细）</span></h3>' +
+    '<table id="statTable"><thead><tr><th>时间</th><th>次数</th><th>成功</th><th>失败</th><th>成功率</th><th>平均耗时</th><th>最大</th><th>最小</th></tr></thead>' +
     '<tbody>'+rows+'</tbody></table></div>';
   $one('#content').innerHTML = html;
+  initTrendScroll(allMinutes);
+}
+
+// 展开/收起分时明细
+async function toggleRecords(tr, proj, cls, mtd, minute) {
+  const next = tr.nextElementSibling;
+  if (next && next.classList.contains('record-detail-row')) {
+    next.remove();
+    tr.querySelector('span').textContent = '▶';
+    return;
+  }
+  // 关闭其他已展开的
+  $all('.record-detail-row').forEach(r => r.remove());
+  $all('.stat-row span').forEach(s => { if(s.textContent==='▼') s.textContent='▶'; });
+
+  tr.querySelector('span').textContent = '▼';
+  const records = await api('/api/records?project='+encodeURIComponent(proj)+'&class='+encodeURIComponent(cls)+'&method='+encodeURIComponent(mtd)+'&minute='+encodeURIComponent(minute));
+
+  let detailHtml;
+  if (!records.length) {
+    detailHtml = '<td colspan="8"><div class="empty" style="padding:12px">该时段无明细记录（明细仅保留最近 2 小时）</div></td>';
+  } else {
+    let rRows = records.map(r => {
+      let stBadge = r.status < 400 ? 'ok' : (r.status < 500 ? 'warn' : 'err');
+      let paramStr = r.params && Object.keys(r.params).length > 0 ? JSON.stringify(r.params) : '-';
+      let respStr = r.response && Object.keys(r.response).length > 0 ? JSON.stringify(r.response) : '-';
+      return '<tr style="background:#fafafa"><td>'+r.time+'</td><td>'+r.duration+'ms</td>' +
+        '<td><span class="badge '+stBadge+'">'+r.status+'</span></td>' +
+        '<td style="font-size:12px;color:#595959;word-break:break-all">'+paramStr+'</td>' +
+        '<td style="font-size:12px;color:#595959;word-break:break-all">'+respStr+'</td></tr>';
+    }).join('');
+    detailHtml = '<td colspan="8" style="padding:0"><table style="margin:0;background:#fafafa">' +
+      '<thead><tr style="background:#f0f0f0"><th>时间</th><th>耗时</th><th>状态</th><th>传入参数</th><th>返回参数</th></tr></thead>' +
+      '<tbody>'+rRows+'</tbody></table></td>';
+  }
+  const detailRow = document.createElement('tr');
+  detailRow.className = 'record-detail-row';
+  detailRow.innerHTML = detailHtml;
+  tr.after(detailRow);
 }
 
 // 搜索

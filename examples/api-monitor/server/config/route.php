@@ -11,6 +11,7 @@ Route::get('/api/realtime',     'app\controller\MonitorController@realtime');
 Route::get('/api/trend',        'app\controller\MonitorController@trend');
 Route::get('/api/search',       'app\controller\MonitorController@search');
 Route::get('/api/dates',        'app\controller\MonitorController@dates');
+Route::get('/api/records',      'app\controller\MonitorController@records');
 
 // 仪表盘页面
 Route::get('/',                 'app\controller\MonitorController@index');

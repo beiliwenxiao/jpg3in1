@@ -48,15 +48,17 @@ class MonitorClient
      * @param string $uri      请求URI
      * @param int    $status   HTTP状态码
      * @param float  $duration 耗时(毫秒)
+     * @param array  $params   请求参数（可选）
+     * @param array  $response 返回参数（可选）
      */
-    public function report(string $class, string $method, string $uri, int $status, float $duration): void
+    public function report(string $class, string $method, string $uri, int $status, float $duration, array $params = [], array $response = []): void
     {
         // 采样率控制
         if ($this->sampleRate < 1.0 && mt_rand(1, 10000) / 10000 > $this->sampleRate) {
             return;
         }
 
-        $data = json_encode([
+        $record = [
             'project'   => $this->project,
             'class'     => $class,
             'method'    => $method,
@@ -64,7 +66,15 @@ class MonitorClient
             'status'    => $status,
             'duration'  => round($duration, 2),
             'timestamp' => time(),
-        ], JSON_UNESCAPED_UNICODE);
+        ];
+        if (!empty($params)) {
+            $record['params'] = $params;
+        }
+        if (!empty($response)) {
+            $record['response'] = $response;
+        }
+
+        $data = json_encode($record, JSON_UNESCAPED_UNICODE);
 
         $this->buffer[] = $data;
 

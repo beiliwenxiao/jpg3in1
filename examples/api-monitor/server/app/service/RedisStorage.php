@@ -44,6 +44,7 @@ class RedisStorage implements StorageInterface
         $status   = (int)($data['status'] ?? 200);
         $success  = $status >= 200 && $status < 400;
         $time     = (int)($data['timestamp'] ?? time());
+        $params   = $data['params']   ?? [];
 
         $key = "{$project}|{$class}|{$method}|{$uri}";
         $minute = date('Y-m-d H:i', $time);
@@ -57,6 +58,20 @@ class RedisStorage implements StorageInterface
         $keysKey = $this->prefix . "keys:{$day}";
         $pipe->sAdd($keysKey, $key);
         $pipe->expire($keysKey, $this->keysTTL);
+
+        // 保存明细到 List
+        $recordKey = $this->prefix . "records:{$key}:{$minute}";
+        $recordData = json_encode([
+            'time' => date('Y-m-d H:i:s', $time),
+            'duration' => $duration,
+            'status' => $status,
+            'params' => $params,
+            'response' => $data['response'] ?? [],
+        ], JSON_UNESCAPED_UNICODE);
+        $pipe->rPush($recordKey, $recordData);
+        $pipe->lTrim($recordKey, -200, -1); // 每分钟最多 200 条
+        $pipe->expire($recordKey, $this->minuteTTL);
+
         $pipe->exec();
 
         $this->aggregate('minute', $key, $minute, $duration, $success, $this->minuteTTL);
@@ -309,5 +324,22 @@ LUA;
             }
         }
         return $result;
+    }
+
+    public function getRecords(string $project, string $class, string $method, string $minute, int $limit = 100): array
+    {
+        $tree = $this->getTree();
+        $uri = $tree[$project][$class][$method] ?? null;
+        if ($uri === null) return [];
+        $key = "{$project}|{$class}|{$method}|{$uri}";
+        $recordKey = $this->prefix . "records:{$key}:{$minute}";
+        $raw = $this->redis->lRange($recordKey, 0, $limit - 1);
+        if (empty($raw)) return [];
+        $records = [];
+        foreach ($raw as $item) {
+            $r = json_decode($item, true);
+            if ($r) $records[] = $r;
+        }
+        return $records;
     }
 }

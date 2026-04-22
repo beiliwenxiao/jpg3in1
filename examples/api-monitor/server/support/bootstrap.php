@@ -35,6 +35,11 @@ if (!empty($logConfig['enable'])) {
     $interval = (int)($logConfig['interval'] ?? 300);
     $logger = new \app\service\MonitorLogger($interval);
     $logger->start();
+
+    // worker 停止时导出一次，确保重启不丢数据
+    register_shutdown_function(function () use ($logger) {
+        $logger->export();
+    });
 }
 
 // 5. 加载 config/bootstrap.php 中配置的启动类

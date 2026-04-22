@@ -38,4 +38,7 @@ interface StorageInterface
 
     /** 判断指定日期是否有数据 */
     public function hasData(string $date): bool;
+
+    /** 获取某接口某分钟的访问明细 */
+    public function getRecords(string $project, string $class, string $method, string $minute, int $limit = 100): array;
 }

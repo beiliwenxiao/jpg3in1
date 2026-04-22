@@ -20,10 +20,20 @@ class MonitorStorage implements StorageInterface
     private StorageInterface $backend;
     private string $driver;
 
+    /** 当前运行周期的唯一标识，用于日志合并时区分不同运行周期 */
+    private string $sessionId;
+
     private function __construct(StorageInterface $backend, string $driver)
     {
         $this->backend = $backend;
         $this->driver  = $driver;
+        $this->sessionId = 's_' . time() . '_' . substr(md5(uniqid((string)mt_rand(), true)), 0, 6);
+    }
+
+    /** 获取当前 sessionId */
+    public function getSessionId(): string
+    {
+        return $this->sessionId;
     }
 
     public static function getInstance(): self
@@ -102,8 +112,48 @@ class MonitorStorage implements StorageInterface
     public function getCountRanking(string $date = '', int $limit = 20): array { return $this->backend->getCountRanking($date, $limit); }
     public function getRealtime(): array { return $this->backend->getRealtime(); }
     public function search(string $keyword, string $date = ''): array { return $this->backend->search($keyword, $date); }
-    public function getDayTrend(string $date = ''): array { return $this->backend->getDayTrend($date); }
+    public function getDayTrend(string $date = ''): array {
+        if (!$date) $date = date('Y-m-d');
+        $live = $this->backend->getDayTrend($date);
+
+        $log = MonitorLogger::readHourLog($this->getLogDir(), $date, $this->sessionId);
+        if ($log === null) return $live;
+
+        // 构建日志中的分钟汇总（已是所有历史 session 的累加）
+        $logMinutes = [];
+        foreach ($log['details'] ?? [] as $detail) {
+            foreach ($detail['periods'] ?? [] as $period => $stats) {
+                if (!isset($logMinutes[$period])) {
+                    $logMinutes[$period] = ['count' => 0, 'success' => 0, 'fail' => 0];
+                }
+                $logMinutes[$period]['count'] += $stats['count'] ?? 0;
+                $logMinutes[$period]['success'] += $stats['success'] ?? 0;
+                $logMinutes[$period]['fail'] += $stats['fail'] ?? 0;
+            }
+        }
+        if (empty($logMinutes)) return $live;
+
+        // 直接累加（日志是历史 session，内存是当前 session，不重复）
+        foreach ($live as &$item) {
+            if (isset($logMinutes[$item['time']])) {
+                $item['count'] += $logMinutes[$item['time']]['count'];
+                $item['success'] += $logMinutes[$item['time']]['success'];
+                $item['fail'] += $logMinutes[$item['time']]['fail'];
+            }
+        }
+        unset($item);
+        return $live;
+    }
     public function hasData(string $date): bool { return $this->backend->hasData($date); }
+    public function getRecords(string $project, string $class, string $method, string $minute, int $limit = 100): array {
+        $records = $this->backend->getRecords($project, $class, $method, $minute, $limit);
+        // 内存/Redis 无数据时从日志文件回退
+        if (empty($records)) {
+            $date = substr($minute, 0, 10);
+            $records = MonitorLogger::readRecordsFromLog($this->getLogDir(), $date, $project, $class, $method, $minute, $this->sessionId);
+        }
+        return array_slice($records, 0, $limit);
+    }
 
     // ========== 日志文件回退读取（与驱动无关） ==========
 
@@ -114,7 +164,7 @@ class MonitorStorage implements StorageInterface
 
     public function getDashboardFromLog(string $date): array
     {
-        $log = MonitorLogger::readDayLog($this->getLogDir(), $date);
+        $log = MonitorLogger::readDayLog($this->getLogDir(), $date, $this->sessionId);
         if ($log === null) {
             return ['date' => $date, 'total_count' => 0, 'success' => 0, 'fail' => 0, 'success_rate' => 0, 'avg_time' => 0];
         }
@@ -123,21 +173,21 @@ class MonitorStorage implements StorageInterface
 
     public function getSlowRankingFromLog(string $date, int $limit = 20): array
     {
-        $log = MonitorLogger::readDayLog($this->getLogDir(), $date);
+        $log = MonitorLogger::readDayLog($this->getLogDir(), $date, $this->sessionId);
         if ($log === null) return [];
         return array_slice($log['slow_ranking'] ?? [], 0, $limit);
     }
 
     public function getCountRankingFromLog(string $date, int $limit = 20): array
     {
-        $log = MonitorLogger::readDayLog($this->getLogDir(), $date);
+        $log = MonitorLogger::readDayLog($this->getLogDir(), $date, $this->sessionId);
         if ($log === null) return [];
         return array_slice($log['count_ranking'] ?? [], 0, $limit);
     }
 
     public function getDetailFromLog(string $project, string $class, string $method, string $date): array
     {
-        $log = MonitorLogger::readHourLog($this->getLogDir(), $date);
+        $log = MonitorLogger::readHourLog($this->getLogDir(), $date, $this->sessionId);
         if ($log === null) return [];
         $result = [];
         foreach ($log['details'] ?? [] as $detail) {
@@ -151,14 +201,14 @@ class MonitorStorage implements StorageInterface
 
     public function getTreeFromLog(string $date): array
     {
-        $log = MonitorLogger::readDayLog($this->getLogDir(), $date);
+        $log = MonitorLogger::readDayLog($this->getLogDir(), $date, $this->sessionId);
         if ($log === null) return [];
         return $log['tree'] ?? [];
     }
 
     public function searchFromLog(string $keyword, string $date): array
     {
-        $log = MonitorLogger::readDayLog($this->getLogDir(), $date);
+        $log = MonitorLogger::readDayLog($this->getLogDir(), $date, $this->sessionId);
         if ($log === null) return [];
         $keyword = strtolower($keyword);
         $results = [];
