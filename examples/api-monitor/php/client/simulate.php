@@ -2,7 +2,7 @@
 /**
  * 模拟客户端 - 生成测试数据发送到监控服务端
  *
- * 运行：php examples/api-monitor/client/simulate.php
+ * 运行：php examples/api-monitor/php/client/simulate.php
  */
 
 require_once __DIR__ . '/src/MonitorClient.php';

@@ -6,7 +6,7 @@ echo ========================================
 echo.
 
 echo [1/2] 启动监控服务端...
-start "API-Monitor-Server" cmd /c "php %~dp0server\windows.php"
+start "API-Monitor-Server" cmd /c "php %~dp0windows.php"
 
 echo 等待服务端启动...
 timeout /t 3 /nobreak >nul

@@ -1,7 +1,7 @@
 <?php
 /**
  * API 监控服务端 - Windows 启动入口
- * 运行：php examples/api-monitor/server/windows.php
+ * 运行：php examples/api-monitor/php/windows.php
  *
  * 同时启动：
  *   1. Webman HTTP 服务（端口 8095）- 仪表盘 + API

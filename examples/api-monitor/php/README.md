@@ -33,7 +33,7 @@
 
 ## 存储配置
 
-支持两种存储驱动，通过 `server/config/monitor.php` 配置：
+支持两种存储驱动，通过 `config/monitor.php` 配置：
 
 ```php
 return [
@@ -72,7 +72,7 @@ return [
 - 数据自动过期：分钟级 1 天、小时级 3 天、天级 30 天
 - 如果 redis 扩展未安装或连接失败，自动回退到内存模式
 
-Redis 连接配置在 `server/config/redis.php`：
+Redis 连接配置在 `config/redis.php`：
 
 ```php
 return [
@@ -85,7 +85,7 @@ return [
 
 ### 日志持久化
 
-开启后，定时将统计数据导出为 JSON 文件，保存在 `server/runtime/logs/monitor/` 目录：
+开启后，定时将统计数据导出为 JSON 文件，保存在 `runtime/logs/monitor/` 目录：
 
 ```
 runtime/logs/monitor/
@@ -153,13 +153,13 @@ runtime/logs/monitor/
 
 **Windows:**
 ```bat
-examples\api-monitor\run-all.bat
+examples\api-monitor\php\run-all.bat
 ```
 
 **Linux:**
 ```bash
-chmod +x examples/api-monitor/run-all.sh
-examples/api-monitor/run-all.sh
+chmod +x examples/api-monitor/php/run-all.sh
+examples/api-monitor/php/run-all.sh
 ```
 
 ### 方式二：分别启动
@@ -167,15 +167,15 @@ examples/api-monitor/run-all.sh
 **1. 启动监控服务端**
 ```bash
 # Windows
-php examples/api-monitor/server/windows.php
+php examples/api-monitor/php/windows.php
 
 # Linux
-php examples/api-monitor/server/start.php start
+php examples/api-monitor/php/start.php start
 ```
 
 **2. 启动模拟客户端（测试用）**
 ```bash
-php examples/api-monitor/client/simulate.php
+php examples/api-monitor/php/client/simulate.php
 ```
 
 **3. 访问仪表盘**
@@ -185,39 +185,38 @@ php examples/api-monitor/client/simulate.php
 ## 目录结构
 
 ```
-examples/api-monitor/
-├── server/
-│   ├── app/
-│   │   ├── controller/
-│   │   │   └── MonitorController.php    # HTTP 控制器
-│   │   └── service/
-│   │       ├── StorageInterface.php     # 存储接口
-│   │       ├── MemoryStorage.php        # 内存存储实现
-│   │       ├── RedisStorage.php         # Redis 存储实现
-│   │       ├── MonitorStorage.php       # 存储代理（自动选择后端）
-│   │       ├── MonitorLogger.php        # 日志持久化
-│   │       └── UdpReceiver.php          # UDP 数据接收器
-│   ├── config/
-│   │   ├── monitor.php                  # 存储驱动 + 日志持久化配置
-│   │   ├── redis.php                    # Redis 连接配置
-│   │   ├── server.php                   # Workerman 服务配置
-│   │   ├── route.php                    # 路由配置
-│   │   └── ...
-│   ├── public/
-│   │   └── index.html                   # Web 仪表盘前端页面
-│   ├── support/
-│   │   ├── bootstrap.php                # Webman 启动引导
-│   │   ├── SimpleContainer.php          # PSR-11 容器
-│   │   └── Request.php
-│   ├── start.php                        # Linux 启动入口
-│   └── windows.php                      # Windows 启动入口
+examples/api-monitor/php/
+├── app/
+│   ├── controller/
+│   │   └── MonitorController.php    # HTTP 控制器
+│   └── service/
+│       ├── StorageInterface.php     # 存储接口
+│       ├── MemoryStorage.php        # 内存存储实现
+│       ├── RedisStorage.php         # Redis 存储实现
+│       ├── MonitorStorage.php       # 存储代理（自动选择后端）
+│       ├── MonitorLogger.php        # 日志持久化
+│       └── UdpReceiver.php          # UDP 数据接收器
+├── config/
+│   ├── monitor.php                  # 存储驱动 + 日志持久化配置
+│   ├── redis.php                    # Redis 连接配置
+│   ├── server.php                   # Workerman 服务配置
+│   ├── route.php                    # 路由配置
+│   └── ...
+├── public/
+│   └── index.html                   # Web 仪表盘前端页面
+├── support/
+│   ├── bootstrap.php                # Webman 启动引导
+│   ├── SimpleContainer.php          # PSR-11 容器
+│   └── Request.php
 ├── client/
 │   ├── src/
-│   │   ├── ApiMonitor.php               # ThinkPHP 中间件
-│   │   └── MonitorClient.php            # UDP 客户端
+│   │   ├── ApiMonitor.php           # ThinkPHP 中间件
+│   │   └── MonitorClient.php        # UDP 客户端
 │   ├── config/
-│   │   └── monitor.php                  # 客户端配置示例
-│   └── simulate.php                     # 模拟数据客户端
+│   │   └── monitor.php              # 客户端配置示例
+│   └── simulate.php                 # 模拟数据客户端
+├── start.php                        # Linux 启动入口
+├── windows.php                      # Windows 启动入口
 └── README.md
 ```
 

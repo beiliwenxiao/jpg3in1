@@ -19,7 +19,7 @@ cleanup() {
 trap cleanup SIGINT SIGTERM
 
 echo "[1/2] 启动监控服务端..."
-php "$SCRIPT_DIR/server/start.php" start -d 2>/dev/null || php "$SCRIPT_DIR/server/start.php" start &
+php "$SCRIPT_DIR/start.php" start -d 2>/dev/null || php "$SCRIPT_DIR/start.php" start &
 SERVER_PID=$!
 
 echo "等待服务端启动..."

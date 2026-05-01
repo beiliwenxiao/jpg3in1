@@ -2,7 +2,7 @@
 <?php
 /**
  * API 监控服务端 - Linux 启动入口
- * 运行：php examples/api-monitor/server/start.php start
+ * 运行：php examples/api-monitor/php/start.php start
  */
 
 define('BASE_PATH', __DIR__);
